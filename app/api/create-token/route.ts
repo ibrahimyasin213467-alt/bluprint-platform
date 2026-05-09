@@ -40,6 +40,13 @@ const REFERRAL_REWARD = 0.05 * LAMPORTS_PER_SOL;
 const DEFAULT_IMAGE_HASH = 'QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3';
 const DEFAULT_IMAGE_URL = `https://gateway.pinata.cloud/ipfs/${DEFAULT_IMAGE_HASH}`;
 
+const MILESTONES = [
+  { count: 10, bonus: 0.1 },
+  { count: 25, bonus: 0.2 },
+  { count: 50, bonus: 0.5 },
+  { count: 100, bonus: 1.0 },
+];
+
 function getRpcUrl(): string {
   const url = process.env.HELIUS_RPC_URL;
   if (!url) throw new Error('HELIUS_RPC_URL is not configured');
@@ -136,7 +143,7 @@ async function createAndRevokeMetadata(
       primarySaleHappened: null,
       isMutable: false,
     }).sendAndConfirm(umi);
-    console.log('✅ Update Authority revoked (3rd revoke)');
+    console.log('✅ Update Authority revoked');
   }
 }
 
@@ -179,7 +186,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Another request is already processing' }, { status: 409 });
     }
 
-    // REFERRAL
+    // ========== REFERRAL ==========
     let feeAmount = BASE_FEE;
     let referralIx = null;
     let referralApplied = false;
@@ -207,20 +214,33 @@ export async function POST(req: NextRequest) {
 
         const earningsKey = `${KEYS.earnings}:${finalReferrer}`;
         const existing = await redis.get(earningsKey);
-        const data: { pending: number; claimed: number; referrals: string[] } =
+        const data: { pending: number; claimed: number; referrals: string[]; milestones: number[] } =
           existing
             ? (typeof existing === 'string' ? JSON.parse(existing) : existing)
-            : { pending: 0, claimed: 0, referrals: [] };
+            : { pending: 0, claimed: 0, referrals: [], milestones: [] };
+
+        if (!data.milestones) data.milestones = [];
 
         data.pending += REFERRAL_REWARD / LAMPORTS_PER_SOL;
         if (!data.referrals.includes(userPublicKey)) data.referrals.push(userPublicKey);
+
+        // Milestone bonus kontrolü
+        const refCount = data.referrals.length;
+        for (const m of MILESTONES) {
+          if (refCount >= m.count && !data.milestones.includes(m.count)) {
+            data.pending += m.bonus;
+            data.milestones.push(m.count);
+            console.log(`🎉 Milestone: ${finalReferrer} → +${m.bonus} SOL (${m.count} refs)`);
+          }
+        }
+
         await redis.set(earningsKey, JSON.stringify(data));
       } catch (e) {
         console.log('Invalid referrer:', e);
       }
     }
 
-    // BALANCE CHECK
+    // ========== BALANCE CHECK ==========
     const userPubkey = new PublicKey(userPublicKey);
     const connection = await getConnection();
     const balance = await connection.getBalance(userPubkey);
@@ -233,11 +253,11 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // MINT KEYPAIR
+    // ========== MINT ==========
     const mintKeypair = Keypair.generate();
     const lamports = await getMinimumBalanceForRentExemptMint(connection);
 
-    // IPFS
+    // ========== IPFS ==========
     let metadataUri = '';
     const pinataJwt = process.env.PINATA_JWT;
 
@@ -267,7 +287,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // TRANSACTION
+    // ========== TRANSACTION ==========
     const { PLATFORM_WALLET, YOUR_WALLET, KUZEN_WALLET } = getWallets();
 
     const platformShare = Math.floor(feeAmount * 0.10);
@@ -300,7 +320,6 @@ export async function POST(req: NextRequest) {
 
     if (referralIx) transaction.add(referralIx);
 
-    // 1. ve 2. revoke
     if (secureToken) {
       transaction.add(
         createSetAuthorityInstruction(mintKeypair.publicKey, userPubkey, AuthorityType.MintTokens, null),
@@ -310,14 +329,13 @@ export async function POST(req: NextRequest) {
 
     transaction.partialSign(mintKeypair);
 
-    // 3. revoke (Update Authority) — async
     if (metadataUri && pinataJwt) {
       createAndRevokeMetadata(mintKeypair, name, symbol, metadataUri, secureToken).catch((e) => {
-        console.error('❌ Metaplex error for mint', mintKeypair.publicKey.toBase58(), ':', e);
+        console.error('❌ Metaplex error:', e);
       });
     }
 
-    // REDIS
+    // ========== REDIS ==========
     try {
       const tokenData = {
         mint: mintKeypair.publicKey.toBase58(),
@@ -364,4 +382,4 @@ export async function POST(req: NextRequest) {
     console.error('❌ ERROR:', error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
-} 
+}
