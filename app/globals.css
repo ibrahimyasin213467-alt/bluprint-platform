@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: white;
+    color: black;
+    font-family: var(--font-inter);
+  }
+  .dark body {
+    background-color: #0a0a0a;
+    color: #ededed;
+  }
+  
+  /* Başlıklar varsayılan Space Grotesk */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-space);
+    font-weight: 700;
+  }
+  
+  /* Butonlar */
+  button {
+    font-family: var(--font-space);
+    font-weight: 600;
+  }
+  
+  /* Input, textarea */
+  input, textarea {
+    font-family: var(--font-inter);
+  }
+  
+  /* Code/mono */
+  code, pre, .mono {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  .text-glow-strong {
+    text-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+}
+
+/* ==================== MOBİL UYUMLULUK (MEVCUT KODU BOZMAZ) ==================== */
+
+/* 1. Dokunmatik hedef boyutları - sadece mobilde */
+@media (max-width: 768px) {
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* iOS zoom'u engelle - inputlarda font 16px+ */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* 2. Tabloları mobilde kaydırılabilir yap */
+@media (max-width: 768px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 3. Tıklama flash'ını kaldır (tüm cihazlar) */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 4. Yumuşak kaydırma */
+html {
+  scroll-behavior: smooth;
+}
