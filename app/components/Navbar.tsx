@@ -11,7 +11,7 @@ import LanguageSwitcher from "./LanguageSwitcher";
 import { useI18n } from "../lib/i18n-provider";
 
 export default function Navbar({ mounted }: { mounted: boolean }) {
-  const { connected, disconnect } = useWallet();
+  const { connected, disconnect, publicKey } = useWallet();
   const { setVisible } = useWalletModal();
   const { t } = useI18n();
   const [scrolled, setScrolled] = useState(false);
@@ -41,6 +41,12 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
     } else {
       setVisible(true);
     }
+  };
+
+  // Cüzdan adresini kısalt (mobil için)
+  const shortenAddress = (address: string) => {
+    if (!address) return "";
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
   const isHome = pathname === "/";
@@ -227,7 +233,7 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full blur opacity-0 group-hover:opacity-100 transition duration-300" />
                 <button
                   onClick={handleWalletClick}
-                  className="relative bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white rounded-full px-3 sm:px-5 py-1.5 sm:py-2 shadow-md transition-all duration-200 flex items-center gap-2 text-xs sm:text-sm hover:scale-105"
+                  className="relative bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white rounded-full px-3 sm:px-5 py-1.5 sm:py-2 shadow-md transition-all duration-200 flex items-center gap-2 text-xs sm:text-sm hover:scale-105 touch-manipulation min-h-[36px] sm:min-h-[44px]"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -243,15 +249,19 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                     <path d="M22 12h-6a2 2 0 0 0-2 2 2 2 0 0 0 2 2h6" />
                     <path d="M6 12h.01" />
                   </svg>
-                  <span className="hidden xs:inline">{connected ? t('nav_disconnect') : t('nav_connect')}</span>
-                  <span className="xs:hidden">{connected ? "Exit" : t('nav_connect')}</span>
+                  <span className="hidden xs:inline">
+                    {connected && publicKey ? shortenAddress(publicKey.toString()) : (connected ? t('nav_disconnect') : t('nav_connect'))}
+                  </span>
+                  <span className="xs:hidden">
+                    {connected && publicKey ? "🔗" : (connected ? "Exit" : t('nav_connect'))}
+                  </span>
                 </button>
               </div>
             )}
 
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition relative z-50 hover:scale-105 transition-transform"
+              className="md:hidden p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition relative z-50 hover:scale-105 transition-transform touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Menu"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -283,7 +293,7 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 hover:scale-105 ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 hover:scale-105 touch-manipulation min-h-[48px] ${
                     link.isActive
                       ? "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600"
                       : "hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -297,7 +307,7 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                 href="https://raydium.io/liquidity/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 hover:scale-105"
+                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 hover:scale-105 touch-manipulation min-h-[48px]"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <span className="text-xl">💧</span>
@@ -332,6 +342,9 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
           .xs\\:hidden {
             display: inline;
           }
+        }
+        .touch-manipulation {
+          touch-action: manipulation;
         }
       `}</style>
     </motion.div>
