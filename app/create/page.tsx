@@ -1,4 +1,4 @@
-"use client";
+-"use client";
 
 import { Suspense } from "react";
 import { useState, useEffect, useRef } from "react";
@@ -13,7 +13,7 @@ import { useToast } from "../components/ToastProvider";
 import CountdownTimer from "../components/CountdownTimer";
 import { useI18n } from "../lib/i18n-provider";
 
-// İç component (tüm mevcut mantık burada)
+// İç component
 function CreatePageContent() {
   const { publicKey } = useWallet();
   const searchParams = useSearchParams();
@@ -37,7 +37,12 @@ function CreatePageContent() {
   const [tokenImage, setTokenImage] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [description, setDescription] = useState("");
-  const [secureToken, setSecureToken] = useState(false);
+  
+  // Revoke seçenekleri (ayrı ayrı)
+  const [revokeMint, setRevokeMint] = useState(false);
+  const [revokeFreeze, setRevokeFreeze] = useState(false);
+  const [revokeUpdate, setRevokeUpdate] = useState(false);
+  
   const [time, setTime] = useState(0);
   const [mintAddress, setMintAddress] = useState("");
   const [tokenCount, setTokenCount] = useState<number | null>(null);
@@ -54,6 +59,9 @@ function CreatePageContent() {
 
   const referrerAddress = searchParams.get("ref");
   const validReferrer = referrerAddress && referrerAddress.length === 44 ? referrerAddress : null;
+
+  // Secure Token aktif mi? (en az biri seçiliyse)
+  const secureToken = revokeMint || revokeFreeze || revokeUpdate;
 
   useEffect(() => setMounted(true), []);
 
@@ -176,7 +184,10 @@ function CreatePageContent() {
           decimals: tokenDecimals,
           imageUrl: tokenImage,
           description,
-          secureToken,
+          secureToken, // API'ye hangi revoke'lerin seçildiğini gönder
+          revokeMint,
+          revokeFreeze,
+          revokeUpdate,
           referrer: validReferrer,
           twitter,
           telegram,
@@ -238,7 +249,9 @@ function CreatePageContent() {
           setSuccessData(null);
           setTokenImage("");
           setPreviewImage(null);
-          setSecureToken(false);
+          setRevokeMint(false);
+          setRevokeFreeze(false);
+          setRevokeUpdate(false);
           setTwitter("");
           setTelegram("");
           setWebsite("");
@@ -254,6 +267,7 @@ function CreatePageContent() {
 
   const isFirstHundred = tokensLeft > 0;
   const displayFee = 0.15;
+  const selectedRevokeCount = [revokeMint, revokeFreeze, revokeUpdate].filter(Boolean).length;
 
   return (
     <PageTransition>
@@ -261,6 +275,7 @@ function CreatePageContent() {
         <Navbar mounted={mounted} />
         <div className="pt-28 max-w-6xl mx-auto px-4 pb-16">
           
+          {/* İLK 100 BANNER */}
           {isFirstHundred && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -298,94 +313,123 @@ function CreatePageContent() {
             </div>
           )}
 
+          {/* BAŞLIK */}
           <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{t('create_title')}</h2>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">{t('create_subtitle')}</p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-block px-4 py-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-medium mb-4 shadow-lg"
+            >
+              ⚡ {t('create_badge') || "LAUNCH YOUR TOKEN"}
+            </motion.div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white">{t('create_title')}</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-2xl mx-auto">{t('create_subtitle')}</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 md:p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_name_label')}</label>
-                  <input
-                    type="text"
-                    value={tokenName}
-                    onChange={(e) => setTokenName(e.target.value)}
-                    placeholder={t('create_name_placeholder')}
-                    className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_symbol_label')}</label>
-                  <input
-                    type="text"
-                    value={tokenSymbol}
-                    onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
-                    placeholder={t('create_symbol_placeholder')}
-                    className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* SOL TARAF - FORM (PREMIUM) */}
+            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 space-y-6">
+              
+              {/* Token İsmi */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_supply_label')}</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <span className="text-blue-500">✨</span> {t('create_name_label')}
+                </label>
                 <input
-                  type="number"
-                  value={tokenSupply}
-                  onChange={(e) => setTokenSupply(Number(e.target.value))}
-                  placeholder={t('create_supply_placeholder')}
-                  className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  type="text"
+                  value={tokenName}
+                  onChange={(e) => setTokenName(e.target.value)}
+                  placeholder={t('create_name_placeholder')}
+                  className="w-full h-12 px-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 />
               </div>
 
+              {/* Token Sembolü */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_decimals_label')}</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <span className="text-blue-500">🔤</span> {t('create_symbol_label')}
+                </label>
                 <input
-                  type="number"
-                  value={tokenDecimals}
-                  onChange={(e) => setTokenDecimals(Number(e.target.value))}
-                  placeholder={t('create_decimals_placeholder')}
-                  className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  type="text"
+                  value={tokenSymbol}
+                  onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
+                  placeholder={t('create_symbol_placeholder')}
+                  className="w-full h-12 px-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition uppercase"
                 />
               </div>
 
+              {/* Supply ve Decimals yan yana */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                    <span className="text-blue-500">💰</span> {t('create_supply_label')}
+                  </label>
+                  <input
+                    type="number"
+                    value={tokenSupply}
+                    onChange={(e) => setTokenSupply(Number(e.target.value))}
+                    className="w-full h-12 px-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                    <span className="text-blue-500">🔢</span> {t('create_decimals_label')}
+                  </label>
+                  <input
+                    type="number"
+                    value={tokenDecimals}
+                    onChange={(e) => setTokenDecimals(Number(e.target.value))}
+                    className="w-full h-12 px-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Logo Yükleme (Premium) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_logo_label')}</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <span className="text-blue-500">🖼️</span> {t('create_logo_label')}
+                </label>
                 <div
-                  className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 bg-gray-50 dark:bg-gray-800"
+                  className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition bg-gray-50 dark:bg-gray-800/50"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {previewImage ? (
-                    <img src={previewImage} alt="Preview" className="w-16 h-16 mx-auto rounded-xl object-cover" />
+                    <img src={previewImage} alt="Preview" className="w-20 h-20 mx-auto rounded-xl object-cover shadow-md" />
                   ) : (
-                    <div className="text-gray-400 dark:text-gray-500">{t('create_logo_placeholder')}</div>
+                    <div className="text-gray-400 dark:text-gray-500">
+                      <div className="text-4xl mb-2">📸</div>
+                      <div className="text-sm">{t('create_logo_placeholder')}</div>
+                    </div>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={handleFileUpload} className="hidden" />
+                  <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFileUpload} className="hidden" />
                 </div>
               </div>
 
+              {/* Açıklama */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_desc_label')}</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <span className="text-blue-500">📝</span> {t('create_desc_label')}
+                </label>
                 <textarea
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={t('create_desc_placeholder')}
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
+              {/* Promo Code */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  🎫 {t('common_promo')} ({t('common_optional')})
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <span className="text-blue-500">🎫</span> {t('common_promo')} ({t('common_optional')})
                 </label>
                 <input
                   type="text"
                   value={promoCodeInput}
                   onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
                   placeholder={t('create_promo_placeholder')}
-                  className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 uppercase"
+                  className="w-full h-12 px-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 uppercase"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   {t('create_promo_hint')}
@@ -393,163 +437,234 @@ function CreatePageContent() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 md:p-8 sticky top-28">
-              <div className="text-center mb-6">
-                <div className="text-5xl mb-2">⚡</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{t('create_launch')}</div>
+            {/* SAĞ TARAF - LAUNCH PANELİ */}
+            <div className="space-y-6">
+              
+              {/* FEE KARTI */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl p-6 text-white shadow-xl">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-2">⚡</div>
+                  <div className="text-2xl font-bold">{t('create_launch')}</div>
+                  {isFirstHundred && (
+                    <div className="inline-flex items-center gap-1 mt-2 bg-white/20 px-3 py-1 rounded-full text-xs">
+                      🎁 {t('create_first100')}
+                    </div>
+                  )}
+                </div>
                 
-                {isFirstHundred && (
-                  <div className="inline-flex items-center gap-1 mt-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-3 py-1 rounded-full text-xs">
-                    <span>🎁</span> {t('create_first100')}
-                  </div>
-                )}
-
-                <div className="mt-4 space-y-2 text-sm">
+                <div className="bg-white/10 rounded-2xl p-4 space-y-2 mb-4">
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">{t('create_launch_fee')}</span>
-                    <span className="font-bold text-green-600">{displayFee} {t('common_sol')}</span>
+                    <span>{t('create_launch_fee')}</span>
+                    <span className="font-bold">{displayFee} {t('common_sol')}</span>
                   </div>
-                  <div className="border-t pt-2 mt-2">
-                    <div className="flex justify-between font-semibold">
+                  <div className="border-t border-white/20 pt-2">
+                    <div className="flex justify-between font-bold">
                       <span>{t('create_total_fee')}</span>
-                      <span className="text-green-600 font-bold text-lg">{displayFee} {t('common_sol')}</span>
+                      <span className="text-xl">{displayFee} {t('common_sol')}</span>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="rounded-xl p-5 mb-6 bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={secureToken}
-                    onChange={(e) => setSecureToken(e.target.checked)}
-                    className="w-5 h-5 rounded border-white/50 bg-white/20 checked:bg-white text-blue-600 focus:ring-2 focus:ring-white cursor-pointer mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <label className="text-base font-bold text-white flex items-center gap-2">
-                        🔒 {t('create_secure_label')}
-                      </label>
-                      <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold animate-pulse">
-                        ⭐ {t('common_free')} ⭐
-                      </span>
-                    </div>
-                    
-                    <div className="mt-3 space-y-1.5">
-                      <div className="flex items-center gap-2 text-sm text-white/90">
-                        <span className="text-green-400 text-base">✅</span>
-                        <span>{t('create_revoke_mint')}</span>
-                        <span className="text-[10px] text-white/60">({t('create_revoke_mint_desc')})</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-white/90">
-                        <span className="text-green-400 text-base">✅</span>
-                        <span>{t('create_revoke_freeze')}</span>
-                        <span className="text-[10px] text-white/60">({t('create_revoke_freeze_desc')})</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-white/90">
-                        <span className="text-green-400 text-base">✅</span>
-                        <span>{t('create_revoke_update')}</span>
-                        <span className="text-[10px] text-white/60">({t('create_revoke_update_desc')})</span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-xs text-white/70 mt-3 border-t border-white/20 pt-2">
-                      🔥 {t('create_security_notice')}
-                    </p>
-                  </div>
+                
+                <div className="text-center text-xs text-white/70">
+                  💳 Fee distributed to platform, team & referral
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowSocialLinks(!showSocialLinks)}
-                className="w-full mb-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2"
-              >
-                <span>🌐</span> {t('create_social_button')}
-                <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{t('common_free')}</span>
-              </button>
-
-              <AnimatePresence>
-                {showSocialLinks && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="overflow-hidden mb-4"
-                  >
-                    <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                      <input
-                        type="url"
-                        value={twitter}
-                        onChange={(e) => setTwitter(e.target.value)}
-                        placeholder={t('create_twitter')}
-                        className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-                      />
-                      <input
-                        type="url"
-                        value={telegram}
-                        onChange={(e) => setTelegram(e.target.value)}
-                        placeholder={t('create_telegram')}
-                        className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-                      />
-                      <input
-                        type="url"
-                        value={website}
-                        onChange={(e) => setWebsite(e.target.value)}
-                        placeholder={t('create_website')}
-                        className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-                      />
-                      <p className="text-[10px] text-gray-400 text-center">
-                        {t('create_social_hint')}
-                      </p>
+              {/* SECURE TOKEN - AYRI AYRI REVOKE OPSİYONLARI */}
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    🔒 {t('create_secure_label')}
+                  </h3>
+                  <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-400 text-black px-3 py-1 rounded-full font-bold animate-pulse">
+                    ⭐ 100% FREE ⭐
+                  </span>
+                </div>
+                
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  {t('create_secure_desc') || "Choose which authorities to revoke. Once revoked, they cannot be restored - your token becomes truly immutable!"}
+                </p>
+                
+                <div className="space-y-3">
+                  {/* Revoke Mint Authority */}
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                    <input
+                      type="checkbox"
+                      checked={revokeMint}
+                      onChange={(e) => setRevokeMint(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        🚫 Mint Authority
+                        <span className="text-xs bg-green-500/20 text-green-600 px-2 py-0.5 rounded-full">RECOMMENDED</span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('create_revoke_mint_desc') || "No one can mint new tokens after this. Prevents inflation."}
+                      </div>
                     </div>
-                  </motion.div>
+                  </label>
+                  
+                  {/* Revoke Freeze Authority */}
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                    <input
+                      type="checkbox"
+                      checked={revokeFreeze}
+                      onChange={(e) => setRevokeFreeze(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        ❄️ Freeze Authority
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('create_revoke_freeze_desc') || "No one can freeze token accounts. Your tokens are always tradeable."}
+                      </div>
+                    </div>
+                  </label>
+                  
+                  {/* Revoke Update Authority */}
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                    <input
+                      type="checkbox"
+                      checked={revokeUpdate}
+                      onChange={(e) => setRevokeUpdate(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        📝 Update Authority
+                        <span className="text-xs bg-purple-500/20 text-purple-600 px-2 py-0.5 rounded-full">PREMIUM</span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('create_revoke_update_desc') || "Locks token metadata (name, symbol, logo) permanently. No rug pulls!"}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                
+                {selectedRevokeCount > 0 && (
+                  <div className="mt-4 p-2 bg-green-500/10 rounded-lg text-center">
+                    <span className="text-sm text-green-600 dark:text-green-400">
+                      ✅ {selectedRevokeCount} authority(s) will be revoked. Your token will be {selectedRevokeCount === 3 ? "COMPLETELY SECURE" : "partially secure"}.
+                    </span>
+                  </div>
                 )}
-              </AnimatePresence>
+                
+                <p className="text-xs text-gray-400 text-center mt-4">
+                  🔥 {t('create_security_notice')}
+                </p>
+              </div>
 
+              {/* SOCIAL LINKS - PREMIUM */}
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
+                <button
+                  onClick={() => setShowSocialLinks(!showSocialLinks)}
+                  className="w-full flex items-center justify-between py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🌐</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{t('create_social_button')}</span>
+                    <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-0.5 rounded-full">FREE</span>
+                  </div>
+                  <span className="text-gray-400">{showSocialLinks ? "▲" : "▼"}</span>
+                </button>
+                
+                <AnimatePresence>
+                  {showSocialLinks && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="overflow-hidden mt-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-gray-400">🐦</span>
+                          <input
+                            type="url"
+                            value={twitter}
+                            onChange={(e) => setTwitter(e.target.value)}
+                            placeholder={t('create_twitter')}
+                            className="w-full h-11 pl-9 pr-4 text-sm border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800"
+                          />
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-gray-400">💬</span>
+                          <input
+                            type="url"
+                            value={telegram}
+                            onChange={(e) => setTelegram(e.target.value)}
+                            placeholder={t('create_telegram')}
+                            className="w-full h-11 pl-9 pr-4 text-sm border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800"
+                          />
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-gray-400">🌍</span>
+                          <input
+                            type="url"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder={t('create_website')}
+                            className="w-full h-11 pl-9 pr-4 text-sm border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800"
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-400 text-center">
+                          {t('create_social_hint')}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* CREATE BUTTON */}
               <button
                 onClick={createToken}
                 disabled={!publicKey || loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-4 rounded-xl shadow-lg disabled:opacity-50"
+                className="w-full bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-700 hover:via-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-lg"
               >
-                {loading ? t('create_deploying') : t('create_button')}
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {t('create_deploying')}
+                  </span>
+                ) : (
+                  t('create_button')
+                )}
               </button>
 
-              {status && <div className="text-sm text-center text-gray-500 dark:text-gray-400 mt-4">{status}</div>}
+              {status && (
+                <div className="text-sm text-center text-gray-500 dark:text-gray-400 mt-2">{status}</div>
+              )}
 
+              {/* PROGRESS BAR */}
               {isProcessing && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-3">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
                   <div className="relative">
-                    <div className="bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+                    <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                       <motion.div
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full"
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 h-full rounded-full"
                         style={{ width: `${progress}%` }}
                         transition={{ duration: 0.3 }}
                       />
                     </div>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                      <span className="text-gray-500 dark:text-gray-400">{step}</span>
-                    </div>
-                    <span className="text-blue-600 font-mono">
-                      {progress < 100 ? `${Math.floor(progress)}%` : "✅ Complete"}
-                    </span>
+                    <span className="text-gray-500 dark:text-gray-400">{step}</span>
+                    <span className="text-blue-600 font-mono">{Math.floor(progress)}%</span>
                   </div>
-                  {progress < 100 && (
-                    <div className="flex justify-between items-center text-[11px] text-gray-400">
-                      <span>⚡ Estimated: ~{estimatedTime}s</span>
-                      <span>🪙 Creating on Solana</span>
-                    </div>
-                  )}
                 </motion.div>
               )}
 
+              {/* REFERRAL ACTIVE BADGE */}
               {validReferrer && (
-                <div className="mt-4 text-xs text-center text-green-600 dark:text-green-400">
-                  🎉 {t('create_referral_active')}
+                <div className="text-center text-xs text-green-600 dark:text-green-400 bg-green-500/10 py-2 rounded-xl">
+                  🎉 {t('create_referral_active')} - You saved 0.05 SOL!
                 </div>
               )}
             </div>
