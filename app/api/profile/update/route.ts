@@ -4,7 +4,7 @@ import { redis } from '@/app/lib/redis';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { wallet, bio, avatar } = body;
+    const { wallet, name, bio, avatar } = body;
 
     if (!wallet) {
       return NextResponse.json({ success: false, error: 'Wallet is required' }, { status: 400 });
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     let profileData = profile ? JSON.parse(profile as string) : {};
     
     // Güncelle
+    if (name !== undefined) profileData.name = name;
     if (bio !== undefined) profileData.bio = bio;
     if (avatar !== undefined) profileData.avatar = avatar;
     profileData.updatedAt = new Date().toISOString();
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
 
     const profileKey = `profile:${wallet}`;
     const profile = await redis.get(profileKey);
-    const profileData = profile ? JSON.parse(profile as string) : { bio: null, avatar: null };
+    const profileData = profile ? JSON.parse(profile as string) : { name: null, bio: null, avatar: null };
 
     return NextResponse.json({
       success: true,

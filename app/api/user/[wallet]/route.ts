@@ -51,9 +51,9 @@ export async function GET(
       }
     }
     
-    // Profil verileri
+    // Profil verileri (name, bio, avatar)
     const profileKey = `profile:${wallet}`;
-    let profileData = { bio: null, avatar: null };
+    let profileData = { name: null, bio: null, avatar: null };
     try {
       const profile = await redis.get(profileKey);
       if (profile) {
@@ -67,6 +67,7 @@ export async function GET(
       success: true,
       user: {
         wallet,
+        name: profileData.name || null,
         totalTokens: userTokens.length,
         totalReferrals: earningsData.referrals?.length || 0,
         totalEarned: earningsData.claimed || 0,
@@ -85,6 +86,7 @@ export async function GET(
       success: true,
       user: {
         wallet: typeof params === 'object' && params ? (params as any).wallet || 'unknown' : 'unknown',
+        name: null,
         totalTokens: 0,
         totalReferrals: 0,
         totalEarned: 0,
@@ -97,4 +99,4 @@ export async function GET(
       }
     });
   }
-}
+} 
