@@ -8,6 +8,8 @@ export async function GET(
   try {
     const { wallet } = await params;
     
+    console.log('API called for wallet:', wallet);
+    
     // Kullanıcının oluşturduğu token'ları bul
     const allTokens = await redis.lrange(KEYS.tokens, 0, -1);
     const userTokens: any[] = [];
@@ -32,6 +34,8 @@ export async function GET(
     const profile = await redis.get(profileKey);
     const profileData = profile ? JSON.parse(profile as string) : { bio: null, avatar: null };
     
+    console.log('Returning user data for:', wallet);
+    
     return NextResponse.json({
       success: true,
       user: {
@@ -49,6 +53,9 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Profile API error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
   }
 }
