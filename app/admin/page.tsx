@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useI18n } from "../lib/i18n-provider";
 import confetti from "canvas-confetti";
+import nacl from "tweetnacl";
 
 const ADMIN_WALLETS = [
   "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x",
@@ -46,9 +47,10 @@ interface ActivityLog {
 }
 
 export default function AdminPage() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signMessage } = useWallet();
   const { t } = useI18n();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "tokens" | "referrals" | "analytics" | "logs">("overview");
@@ -70,49 +72,98 @@ export default function AdminPage() {
 
   const walletAddress = publicKey?.toString();
 
-  const authHeaders = {
-    'x-wallet-address': walletAddress || '',
-  };
-
+  // Admin doğrulama - imzalı mesaj
   useEffect(() => {
-    if (!connected || !publicKey) {
-      setIsAuthorized(false);
-      setLoading(false);
-      return;
-    }
+    const verifyAdmin = async () => {
+      if (!connected || !publicKey || !signMessage) {
+        setIsAuthorized(false);
+        setIsVerifying(false);
+        setLoading(false);
+        return;
+      }
 
-    const isAdmin = ADMIN_WALLETS.some(
-      (addr) => addr.toLowerCase() === publicKey.toString().toLowerCase()
-    );
+      const isAdmin = ADMIN_WALLETS.some(
+        (addr) => addr.toLowerCase() === publicKey.toString().toLowerCase()
+      );
 
-    if (!isAdmin) {
-      setIsAuthorized(false);
-      setLoading(false);
-    } else {
-      setIsAuthorized(true);
-      fetchAllData();
-      setLoading(false);
-    }
-  }, [publicKey, connected]);
+      if (!isAdmin) {
+        setIsAuthorized(false);
+        setIsVerifying(false);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // İmzalanacak mesaj
+        const message = `Authenticate admin access to BluPrint Dashboard at ${Date.now()}`;
+        const encodedMessage = new TextEncoder().encode(message);
+        
+        // Mesajı imzala
+        const signature = await signMessage(encodedMessage);
+        
+        // Backend'e doğrulat
+        const res = await fetch("/api/admin/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            publicKey: publicKey.toString(),
+            signature: Buffer.from(signature).toString("base64"),
+            message,
+          }),
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          setIsAuthorized(true);
+          localStorage.setItem("adminToken", data.token);
+          await fetchAllData();
+        } else {
+          setIsAuthorized(false);
+        }
+      } catch (err) {
+        console.error("Admin verification error:", err);
+        setIsAuthorized(false);
+      } finally {
+        setIsVerifying(false);
+        setLoading(false);
+      }
+    };
+
+    verifyAdmin();
+  }, [publicKey, connected, signMessage]);
 
   const fetchAllData = async () => {
+    const token = localStorage.getItem("adminToken");
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
     await Promise.all([
-      fetchStats(),
-      fetchRecentTokens(),
-      fetchTopReferrers(),
-      fetchActivityLogs(),
+      fetchStats(headers),
+      fetchRecentTokens(headers),
+      fetchTopReferrers(headers),
+      fetchActivityLogs(headers),
     ]);
   };
 
   const refreshData = async () => {
     setRefreshing(true);
-    await fetchAllData();
+    const token = localStorage.getItem("adminToken");
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    await Promise.all([
+      fetchStats(headers),
+      fetchRecentTokens(headers),
+      fetchTopReferrers(headers),
+      fetchActivityLogs(headers),
+    ]);
     setTimeout(() => setRefreshing(false), 500);
   };
 
-  const fetchStats = async () => {
+  const fetchStats = async (headers?: HeadersInit) => {
     try {
-      const res = await fetch("/api/admin-stats", { headers: authHeaders });
+      const res = await fetch("/api/admin-stats", { headers });
       const data = await res.json();
       if (data.success) setStats(data.stats);
     } catch (err) {
@@ -120,9 +171,9 @@ export default function AdminPage() {
     }
   };
 
-  const fetchRecentTokens = async () => {
+  const fetchRecentTokens = async (headers?: HeadersInit) => {
     try {
-      const res = await fetch("/api/track-token", { headers: authHeaders });
+      const res = await fetch("/api/track-token", { headers });
       const data = await res.json();
       if (data.success) setRecentTokens(data.tokens.slice(-30).reverse());
     } catch (err) {
@@ -130,9 +181,9 @@ export default function AdminPage() {
     }
   };
 
-  const fetchTopReferrers = async () => {
+  const fetchTopReferrers = async (headers?: HeadersInit) => {
     try {
-      const res = await fetch("/api/referral-leaderboard", { headers: authHeaders });
+      const res = await fetch("/api/referral-leaderboard", { headers });
       const data = await res.json();
       if (data.success) setTopReferrers(data.leaderboard);
     } catch (err) {
@@ -140,9 +191,9 @@ export default function AdminPage() {
     }
   };
 
-  const fetchActivityLogs = async () => {
+  const fetchActivityLogs = async (headers?: HeadersInit) => {
     try {
-      const res = await fetch("/api/activity-logs", { headers: authHeaders });
+      const res = await fetch("/api/activity-logs", { headers });
       const data = await res.json();
       if (data.success) setActivityLogs(data.logs.slice(-50).reverse());
     } catch (err) {
@@ -150,7 +201,7 @@ export default function AdminPage() {
     }
   };
 
-  if (loading) {
+  if (loading || isVerifying) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -158,7 +209,9 @@ export default function AdminPage() {
             <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full" />
             <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
-          <p className="text-gray-400 mt-4 font-mono">{t('admin_secure')}...</p>
+          <p className="text-gray-400 mt-4 font-mono">
+            {isVerifying ? ">_ VERIFYING SIGNATURE..." : ">_ LOADING..."}
+          </p>
         </div>
       </div>
     );
@@ -208,12 +261,12 @@ export default function AdminPage() {
               <div className="h-6 w-px bg-gray-700" />
               <div className="flex items-center gap-2 text-xs font-mono text-green-500">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                {t('admin_secure')}
+                SECURE • SIGNED
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="text-xs text-gray-500 font-mono">{t('admin_authorized')}</p>
+                <p className="text-xs text-gray-500 font-mono">AUTHORIZED</p>
                 <p className="text-xs font-mono text-green-500">
                   {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-6)}
                 </p>
@@ -259,6 +312,7 @@ export default function AdminPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* REST OF THE CONTENT SAME AS BEFORE */}
         {activeTab === "overview" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -290,7 +344,7 @@ export default function AdminPage() {
             <div className="grid lg:grid-cols-2 gap-6">
               <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-mono text-sm font-bold text-gray-300">{t('admin_recent')}</h3>
+                  <h3 className="font-mono text-sm font-bold text-gray-300">RECENT TOKENS</h3>
                   <span className="text-xs text-gray-500">{recentTokens.length} total</span>
                 </div>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -311,7 +365,7 @@ export default function AdminPage() {
 
               <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-mono text-sm font-bold text-gray-300">{t('admin_top_ref')}</h3>
+                  <h3 className="font-mono text-sm font-bold text-gray-300">TOP REFERRERS</h3>
                   <span className="text-xs text-gray-500">leaderboard</span>
                 </div>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -329,8 +383,8 @@ export default function AdminPage() {
                         <span className="font-mono text-sm">{user.wallet.slice(0, 6)}...{user.wallet.slice(-4)}</span>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-green-500 font-mono">{user.referrals} {t('ref_referrals')}</p>
-                        <p className="text-xs text-gray-500">{user.earnings.toFixed(2)} SOL {t('admin_earned')}</p>
+                        <p className="text-sm text-green-500 font-mono">{user.referrals} referrals</p>
+                        <p className="text-xs text-gray-500">{user.earnings.toFixed(2)} SOL earned</p>
                       </div>
                     </div>
                   ))}
@@ -340,6 +394,7 @@ export default function AdminPage() {
           </motion.div>
         )}
 
+        {/* Other tabs remain similar - keep existing code */}
         {activeTab === "tokens" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="bg-gray-900/50 rounded-2xl border border-gray-800 overflow-hidden">
@@ -348,8 +403,8 @@ export default function AdminPage() {
                   <thead className="bg-gray-950 border-b border-gray-800">
                     <tr>
                       <th className="text-left p-4 text-xs font-mono text-gray-500">#</th>
-                      <th className="text-left p-4 text-xs font-mono text-gray-500">{t('tokenNameLabel')}</th>
-                      <th className="text-left p-4 text-xs font-mono text-gray-500">{t('tokenSymbolLabel')}</th>
+                      <th className="text-left p-4 text-xs font-mono text-gray-500">NAME</th>
+                      <th className="text-left p-4 text-xs font-mono text-gray-500">SYMBOL</th>
                       <th className="text-left p-4 text-xs font-mono text-gray-500">MINT ADDRESS</th>
                       <th className="text-left p-4 text-xs font-mono text-gray-500">CREATED</th>
                       <th className="text-left p-4 text-xs font-mono text-gray-500">CREATOR</th>
@@ -382,9 +437,8 @@ export default function AdminPage() {
                     <tr>
                       <th className="text-left p-4 text-xs font-mono text-gray-500">#</th>
                       <th className="text-left p-4 text-xs font-mono text-gray-500">WALLET</th>
-                      <th className="text-left p-4 text-xs font-mono text-gray-500">{t('ref_total')}</th>
-                      <th className="text-left p-4 text-xs font-mono text-gray-500">{t('admin_earned')}</th>
-                      <th className="text-left p-4 text-xs font-mono text-gray-500">CLAIMED</th>
+                      <th className="text-left p-4 text-xs font-mono text-gray-500">REFERRALS</th>
+                      <th className="text-left p-4 text-xs font-mono text-gray-500">EARNED</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -394,7 +448,6 @@ export default function AdminPage() {
                         <td className="p-4 font-mono text-sm">{user.wallet.slice(0, 8)}...{user.wallet.slice(-6)}</td>
                         <td className="p-4"><span className="text-green-500 font-mono">{user.referrals}</span></td>
                         <td className="p-4 text-sm text-gray-400">{user.earnings.toFixed(2)} SOL</td>
-                        <td className="p-4 text-sm text-gray-400">-</td>
                       </tr>
                     ))}
                   </tbody>
