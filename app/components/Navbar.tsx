@@ -67,15 +67,23 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           
-          {/* LOGO - mobilde küçüldü */}
+          {/* LOGO - favicon eklendi */}
           <Link href="/" className="group relative block flex-shrink-0">
             <div 
-              className="relative px-3 sm:px-5 py-1.5 sm:py-2 rounded-full transition-all duration-300"
+              className="relative px-3 sm:px-5 py-1.5 sm:py-2 rounded-full transition-all duration-300 flex items-center gap-2"
               style={{
                 backgroundColor: "#0a0f1a",
                 boxShadow: `inset 0 1px 1px rgba(255, 255, 255, 0.15), inset 0 -2px 1px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.2)`,
               }}
             >
+              {/* FAVICON LOGO - SOLDAA */}
+              <img 
+                src="/favicon.ico" 
+                alt="BluPrint" 
+                className="w-5 h-5 sm:w-6 sm:h-6 rounded-md"
+              />
+              
+              {/* YAZI LOGO - SAĞINDA */}
               <div className="relative flex items-baseline font-['Inter',sans-serif] font-extrabold text-sm sm:text-xl md:text-2xl tracking-tight">
                 <span style={{ color: "#3b82f6" }}>Blu</span>
                 <span style={{ color: "#ffffff" }}>Print</span>
