@@ -169,7 +169,7 @@ export default function ReferralPage() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen flex flex-col">
         <Navbar mounted={mounted} />
         <div className="max-w-4xl mx-auto px-4 py-12 w-full flex-1">
 
