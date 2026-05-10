@@ -9,6 +9,9 @@ const sora = Sora({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "BluPrint | Launch Meme Coins on Solana",
   description: "Create and launch your own Solana meme coin in seconds.",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
