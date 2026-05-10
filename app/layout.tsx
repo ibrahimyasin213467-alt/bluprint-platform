@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "BluPrint | Launch Meme Coins on Solana",
   description: "Create and launch your own Solana meme coin in seconds.",
   icons: {
-    icon: "/favicon.png",
+    icon: "/favicon.ico",
   },
 };
 
