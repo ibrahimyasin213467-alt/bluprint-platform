@@ -81,7 +81,6 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                 src="/favicon.ico" 
                 alt="BluPrint" 
                 className="h-6 sm:h-7 md:h-8 w-auto rounded-md"
-
               />
               
               {/* YAZI LOGO - SAĞINDA */}
