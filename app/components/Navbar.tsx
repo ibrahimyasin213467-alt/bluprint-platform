@@ -76,14 +76,11 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                 boxShadow: `inset 0 1px 1px rgba(255, 255, 255, 0.15), inset 0 -2px 1px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.2)`,
               }}
             >
-              {/* FAVICON LOGO - SOLDAA */}
               <img 
                 src="/favicon.ico" 
                 alt="BluPrint" 
                 className="w-6 h-6 sm:w-8 sm:h-8 rounded-md"
               />
-              
-              {/* YAZI LOGO - SAĞINDA */}
               <div className="relative flex items-baseline font-['Inter',sans-serif] font-extrabold text-sm sm:text-xl md:text-2xl tracking-tight">
                 <span style={{ color: "#3b82f6" }}>Blu</span>
                 <span style={{ color: "#ffffff" }}>Print</span>
@@ -91,7 +88,7 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
             </div>
           </Link>
 
-          {/* DESKTOP NAV LINKS - sadece md ve üzeri */}
+          {/* DESKTOP NAV LINKS */}
           <div className="hidden md:flex items-center gap-1.5 bg-gray-100/40 dark:bg-gray-800/40 rounded-full p-1 shadow-inner">
             
             <Link href="/" className={`group relative px-5 py-2 rounded-full text-sm font-semibold transition-all duration-300 overflow-hidden ${isHome ? "text-white" : "text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"}`}>
@@ -115,7 +112,7 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
             </Link>
           </div>
 
-          {/* RIGHT SECTION - mobilde daha kompakt */}
+          {/* RIGHT SECTION */}
           <div className="flex items-center gap-1 sm:gap-2">
             
             <Link href="/live" className={`group relative px-2 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 flex items-center gap-1 ${isLive ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/25" : "bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-105"}`}>
@@ -126,6 +123,20 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
               <span className="hidden xs:inline text-xs">{t('nav_live')}</span>
               <span className="xs:hidden text-sm">🔴</span>
             </Link>
+
+            {/* PROFİL BUTONU - SADECE CÜZDAN BAĞLIYKEN */}
+            {mounted && publicKey && (
+              <Link
+                href={`/profile/${publicKey.toString()}`}
+                className="relative bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 shadow-md transition-all duration-200 flex items-center gap-1 text-xs sm:text-sm hover:scale-105 touch-manipulation"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sm:w-4 sm:h-4">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <span className="hidden xs:inline">Profil</span>
+              </Link>
+            )}
 
             <div className="hidden sm:flex items-center gap-1">
               <ThemeToggle />
@@ -151,7 +162,7 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
 
       <div className="mt-1 sm:mt-2 h-[1px] bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
 
-      {/* MOBILE MENU - daha düzenli */}
+      {/* MOBILE MENU */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3 }} className="md:hidden bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
@@ -172,6 +183,13 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
                 <span className="text-lg">🔴</span>
                 <span className="font-medium text-sm">{t('nav_live')}</span>
               </Link>
+              {/* Mobil menüde profil linki */}
+              {publicKey && (
+                <Link href={`/profile/${publicKey.toString()}`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 touch-manipulation min-h-[44px]">
+                  <span className="text-lg">👤</span>
+                  <span className="font-medium text-sm">Profil</span>
+                </Link>
+              )}
               <a href="https://raydium.io/liquidity/" target="_blank" rel="noopener noreferrer" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 touch-manipulation min-h-[44px]">
                 <span className="text-lg">💧</span>
                 <span className="font-medium text-sm">Raydium</span>
