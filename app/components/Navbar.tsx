@@ -80,7 +80,8 @@ export default function Navbar({ mounted }: { mounted: boolean }) {
               <img 
                 src="/favicon.ico" 
                 alt="BluPrint" 
-                className="w-15 h-15 rounded-md"
+                className="h-6 sm:h-7 md:h-8 w-auto rounded-md"
+
               />
               
               {/* YAZI LOGO - SAĞINDA */}
