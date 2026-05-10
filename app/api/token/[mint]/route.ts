@@ -3,10 +3,10 @@ import { redis, KEYS } from '@/app/lib/redis';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { mint: string } }
+  { params }: { params: Promise<{ mint: string }> }
 ) {
   try {
-    const { mint } = params;
+    const { mint } = await params;
     
     // Redis'teki tüm token'ları al
     const allTokens = await redis.lrange(KEYS.tokens, 0, -1);

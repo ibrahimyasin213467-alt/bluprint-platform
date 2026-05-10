@@ -3,10 +3,10 @@ import { redis, KEYS } from '@/app/lib/redis';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { wallet: string } }
+  { params }: { params: Promise<{ wallet: string }> }
 ) {
   try {
-    const { wallet } = params;
+    const { wallet } = await params;
     
     // Kullanıcının oluşturduğu token'ları bul
     const allTokens = await redis.lrange(KEYS.tokens, 0, -1);
