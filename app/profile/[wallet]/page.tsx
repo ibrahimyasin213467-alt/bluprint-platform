@@ -23,9 +23,6 @@ interface UserData {
     createdAt: string;
     image: string;
   }>;
-}
-
-interface ProfileData {
   bio: string | null;
   avatar: string | null;
 }
@@ -35,7 +32,6 @@ export default function ProfilePage() {
   const params = useParams();
   const [mounted, setMounted] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -56,6 +52,7 @@ export default function ProfilePage() {
         const data = await res.json();
         if (data.success) {
           setUserData(data.user);
+          setBioInput(data.user.bio || "");
         }
       } catch (err) {
         console.error(err);
@@ -65,26 +62,6 @@ export default function ProfilePage() {
     };
     
     fetchUserData();
-  }, [walletAddress]);
-
-  // Profil verilerini getir (bio, avatar)
-  useEffect(() => {
-    if (!walletAddress) return;
-    
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch(`/api/profile/update?wallet=${walletAddress}`);
-        const data = await res.json();
-        if (data.success) {
-          setProfileData(data.profile);
-          setBioInput(data.profile.bio || "");
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    
-    fetchProfile();
   }, [walletAddress]);
 
   const shortenAddress = (address: string) => {
@@ -118,7 +95,7 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (data.success) {
-        setProfileData(data.profile);
+        setUserData(prev => prev ? { ...prev, bio: data.profile.bio } : prev);
         setEditingBio(false);
       }
     } catch (err) {
@@ -141,10 +118,11 @@ export default function ProfilePage() {
               <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full" />
             </div>
           ) : !userData ? (
+            // KULLANICI BULUNAMADI (API hatası)
             <div className="text-center py-16">
               <div className="text-4xl mb-4">👤</div>
               <h2 className="text-xl font-bold dark:text-white">Kullanıcı bulunamadı</h2>
-              <p className="text-gray-500 mt-2">Bu cüzdan ile henüz token oluşturulmamış.</p>
+              <p className="text-gray-500 mt-2">Bir hata oluştu. Lütfen daha sonra tekrar dene.</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -153,8 +131,8 @@ export default function ProfilePage() {
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-2xl">
-                    {profileData?.avatar ? (
-                      <img src={profileData.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                    {userData.avatar ? (
+                      <img src={userData.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
                     ) : (
                       "👤"
                     )}
@@ -167,28 +145,28 @@ export default function ProfilePage() {
                     {/* BİYOGRAFİ */}
                     {isOwnProfile ? (
                       editingBio ? (
-                        <div className="mt-2 flex items-center gap-2">
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <input
                             type="text"
                             value={bioInput}
                             onChange={(e) => setBioInput(e.target.value)}
                             placeholder="Kendini tanıt..."
-                            className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 w-full sm:w-64"
                             maxLength={100}
                           />
                           <button
                             onClick={saveBio}
                             disabled={savingBio}
-                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                           >
                             {savingBio ? "..." : "Kaydet"}
                           </button>
                           <button
                             onClick={() => {
                               setEditingBio(false);
-                              setBioInput(profileData?.bio || "");
+                              setBioInput(userData.bio || "");
                             }}
-                            className="px-3 py-1 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                            className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
                           >
                             İptal
                           </button>
@@ -196,7 +174,7 @@ export default function ProfilePage() {
                       ) : (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {profileData?.bio || "Henüz bir biyografi eklenmemiş."}
+                            {userData.bio || "Henüz bir biyografi eklenmemiş."}
                           </p>
                           <button
                             onClick={() => setEditingBio(true)}
@@ -208,7 +186,7 @@ export default function ProfilePage() {
                       )
                     ) : (
                       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        {profileData?.bio || "Henüz bir biyografi eklenmemiş."}
+                        {userData.bio || "Henüz bir biyografi eklenmemiş."}
                       </p>
                     )}
                     
@@ -234,7 +212,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               
-              {/* İSTATİSTİKLER */}
+              {/* İSTATİSTİKLER - Kullanıcı token oluşturmamışsa farklı göster */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-center">
                   <div className="text-2xl mb-1">🪙</div>
@@ -258,8 +236,8 @@ export default function ProfilePage() {
                 </div>
               </div>
               
-              {/* TOKEN LİSTESİ */}
-              {userData.tokens.length > 0 && (
+              {/* TOKEN LİSTESİ - SADECE TOKEN VARSA GÖSTER */}
+              {userData.tokens.length > 0 ? (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span>🪙</span> Oluşturduğu Token&apos;lar
@@ -282,6 +260,21 @@ export default function ProfilePage() {
                       </Link>
                     ))}
                   </div>
+                </div>
+              ) : isOwnProfile ? (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 text-center">
+                  <div className="text-4xl mb-2">🪙</div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Henüz token oluşturmadın</h2>
+                  <p className="text-sm text-gray-500 mb-4">İlk token'ını oluşturmak ister misin?</p>
+                  <Link href="/create" className="inline-block bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition">
+                    Token Oluştur
+                  </Link>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 text-center">
+                  <div className="text-4xl mb-2">🪙</div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Henüz token oluşturulmamış</h2>
+                  <p className="text-sm text-gray-500">Bu kullanıcı henüz bir token oluşturmadı.</p>
                 </div>
               )}
               

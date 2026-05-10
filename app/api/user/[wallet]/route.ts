@@ -27,6 +27,11 @@ export async function GET(
     // Promo code'u sadece token oluşturmuşsa gönder
     const promoCode = userTokens.length > 0 ? await redis.get(`promocode:${wallet}`) : null;
     
+    // Profil verilerini al (bio, avatar)
+    const profileKey = `profile:${wallet}`;
+    const profile = await redis.get(profileKey);
+    const profileData = profile ? JSON.parse(profile as string) : { bio: null, avatar: null };
+    
     return NextResponse.json({
       success: true,
       user: {
@@ -38,6 +43,8 @@ export async function GET(
         promoCode: promoCode || null,
         hasCreatedToken: userTokens.length > 0,
         tokens: userTokens.slice(0, 10),
+        bio: profileData.bio,
+        avatar: profileData.avatar,
       }
     });
   } catch (error: any) {
