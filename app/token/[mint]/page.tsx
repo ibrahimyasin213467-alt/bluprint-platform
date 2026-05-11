@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/app/components/Navbar";
 import Footer from "@/app/components/Footer";
 import PageTransition from "@/app/components/PageTransition";
 
@@ -56,7 +55,7 @@ export default function TokenPage() {
   };
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('tr-TR');
+    return new Date(date).toLocaleDateString('en-US');
   };
 
   if (!mounted) return null;
@@ -64,8 +63,7 @@ export default function TokenPage() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <Navbar mounted={mounted} />
-        <div className="pt-28 max-w-4xl mx-auto px-4 pb-16">
+        <div className="pt-6 max-w-4xl mx-auto px-4 pb-16">
           
           {loading ? (
             <div className="flex justify-center items-center h-64">
@@ -74,16 +72,16 @@ export default function TokenPage() {
           ) : !token ? (
             <div className="text-center py-16">
               <div className="text-4xl mb-4">🪙</div>
-              <h2 className="text-xl font-bold dark:text-white">Token bulunamadı</h2>
-              <p className="text-gray-500 mt-2">Bu token mevcut değil veya silinmiş.</p>
+              <h2 className="text-xl font-bold dark:text-white">Token not found</h2>
+              <p className="text-gray-500 mt-2">This token does not exist or has been deleted.</p>
               <Link href="/live" className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-xl">
-                Token Listesine Dön
+                Back to Token List
               </Link>
             </div>
           ) : (
             <div className="space-y-6">
               
-              {/* TOKEN BAŞLIK */}
+              {/* TOKEN HEADER */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
                 <div className="flex items-center gap-4 flex-wrap">
                   <img src={token.image} alt={token.name} className="w-20 h-20 rounded-2xl object-cover" />
@@ -100,18 +98,18 @@ export default function TokenPage() {
                 </div>
               </div>
               
-              {/* AÇIKLAMA */}
+              {/* DESCRIPTION */}
               {token.description && (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">📝 Hakkında</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">📝 About</h2>
                   <p className="text-gray-700 dark:text-gray-300">{token.description}</p>
                 </div>
               )}
               
-              {/* SOSYAL LİNKLER */}
+              {/* SOCIAL LINKS */}
               {(token.twitter || token.telegram || token.website) && (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">🔗 Bağlantılar</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">🔗 Links</h2>
                   <div className="flex gap-3 flex-wrap">
                     {token.twitter && (
                       <a href={token.twitter} target="_blank" rel="noopener noreferrer" className="bg-black text-white px-4 py-2 rounded-xl text-sm hover:opacity-80">
@@ -132,16 +130,16 @@ export default function TokenPage() {
                 </div>
               )}
               
-              {/* SOLSCAN LİNKİ */}
+              {/* SOLSCAN LINK */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">🔍 Blockchain'de Gör</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">🔍 On Blockchain</h2>
                 <a 
                   href={`https://solscan.io/token/${token.mint}`} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="inline-block bg-purple-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-purple-700 transition"
                 >
-                  🔎 Solscan'da Aç
+                  🔎 View on Solscan
                 </a>
               </div>
               

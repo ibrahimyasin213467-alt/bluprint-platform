@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/app/components/Navbar";
 import Footer from "@/app/components/Footer";
 import PageTransition from "@/app/components/PageTransition";
 
@@ -138,8 +137,7 @@ export default function ProfilePage() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <Navbar mounted={mounted} />
-        <div className="pt-28 max-w-4xl mx-auto px-4 pb-16">
+        <div className="pt-6 max-w-4xl mx-auto px-4 pb-16">
           
           {loading ? (
             <div className="flex justify-center items-center h-64">
@@ -165,7 +163,6 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div className="flex-1">
-                    {/* DISPLAY NAME */}
                     {isOwnProfile && editingName ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <input
@@ -176,20 +173,10 @@ export default function ProfilePage() {
                           className="px-3 py-1.5 text-lg font-bold border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 w-full sm:w-64"
                           maxLength={50}
                         />
-                        <button
-                          onClick={saveName}
-                          disabled={saving}
-                          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                        >
+                        <button onClick={saveName} disabled={saving} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                           {saving ? "..." : "Save"}
                         </button>
-                        <button
-                          onClick={() => {
-                            setEditingName(false);
-                            setNameInput(userData.name || "");
-                          }}
-                          className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-                        >
+                        <button onClick={() => { setEditingName(false); setNameInput(userData.name || ""); }} className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
                           Cancel
                         </button>
                       </div>
@@ -199,24 +186,17 @@ export default function ProfilePage() {
                           {userData.name || shortenAddress(userData.wallet)}
                         </h1>
                         {isOwnProfile && (
-                          <button
-                            onClick={() => setEditingName(true)}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
+                          <button onClick={() => setEditingName(true)} className="text-xs text-blue-600 hover:underline">
                             ✏️ Edit name
                           </button>
                         )}
                       </div>
                     )}
                     
-                    {/* WALLET ADDRESS (if name is set, show wallet small) */}
                     {userData.name && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {shortenAddress(userData.wallet)}
-                      </p>
+                      <p className="text-xs text-gray-500 mt-1">{shortenAddress(userData.wallet)}</p>
                     )}
                     
-                    {/* BIO */}
                     {isOwnProfile ? (
                       editingBio ? (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -228,48 +208,27 @@ export default function ProfilePage() {
                             className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 w-full sm:w-64"
                             maxLength={100}
                           />
-                          <button
-                            onClick={saveBio}
-                            disabled={saving}
-                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                          >
+                          <button onClick={saveBio} disabled={saving} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                             {saving ? "..." : "Save"}
                           </button>
-                          <button
-                            onClick={() => {
-                              setEditingBio(false);
-                              setBioInput(userData.bio || "");
-                            }}
-                            className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-                          >
+                          <button onClick={() => { setEditingBio(false); setBioInput(userData.bio || ""); }} className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
                             Cancel
                           </button>
                         </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {userData.bio || "No bio added yet."}
-                          </p>
-                          <button
-                            onClick={() => setEditingBio(true)}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
+                          <p className="text-sm text-gray-600 dark:text-gray-400">{userData.bio || "No bio added yet."}</p>
+                          <button onClick={() => setEditingBio(true)} className="text-xs text-blue-600 hover:underline">
                             ✏️ Edit bio
                           </button>
                         </div>
                       )
                     ) : (
-                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        {userData.bio || "No bio added yet."}
-                      </p>
+                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{userData.bio || "No bio added yet."}</p>
                     )}
                     
-                    {/* PROMO CODE - only if user created a token */}
                     {isOwnProfile && userData.hasCreatedToken && userData.promoCode && (
-                      <button
-                        onClick={copyPromoCode}
-                        className="mt-2 inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-sm hover:bg-blue-200 dark:hover:bg-blue-800/30 transition"
-                      >
+                      <button onClick={copyPromoCode} className="mt-2 inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-sm hover:bg-blue-200 transition">
                         <span>🎫</span>
                         <span className="font-mono">{userData.promoCode}</span>
                         <span>{copied ? "✅" : "📋"}</span>
@@ -318,11 +277,7 @@ export default function ProfilePage() {
                   </h2>
                   <div className="space-y-3">
                     {userData.tokens.map((token) => (
-                      <Link
-                        key={token.mint}
-                        href={`/token/${token.mint}`}
-                        className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                      >
+                      <Link key={token.mint} href={`/token/${token.mint}`} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 transition">
                         <div className="flex items-center gap-3">
                           <img src={token.image} alt={token.name} className="w-8 h-8 rounded-full object-cover" />
                           <div>
