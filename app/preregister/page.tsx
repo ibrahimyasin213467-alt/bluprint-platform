@@ -3,10 +3,17 @@
 import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
+interface Registration {
+  wallet: string;
+  tier: string;
+  registeredAt: string;
+  referrals: number;
+}
+
 export default function AdminPreregisterPage() {
   const { publicKey, connected } = useWallet();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [registrations, setRegistrations] = useState<any[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
