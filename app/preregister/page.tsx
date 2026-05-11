@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { motion } from "framer-motion";
-import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
 
@@ -78,7 +77,7 @@ export default function PreregisterPage() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <Navbar mounted={true} />
+        
         <div className="pt-28 max-w-4xl mx-auto px-4 pb-16">
           
           <div className="text-center mb-10">

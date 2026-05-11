@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
 export default function AboutPage() {
@@ -11,7 +10,7 @@ export default function AboutPage() {
 
   return (
     <div className="relative min-h-screen">
-      <Navbar mounted={mounted} />
+      
       <div className="pt-28 max-w-4xl mx-auto px-4 pb-16">
         <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6 text-center">
           About Us

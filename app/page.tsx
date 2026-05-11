@@ -5,7 +5,6 @@ import { useState, useEffect, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import PageTransition from "./components/PageTransition";
 import HeroSection from "./components/HeroSection";
@@ -231,7 +230,7 @@ function HomeContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <Navbar mounted={mounted} />
+        
         <div className="pt-24 max-w-6xl mx-auto px-4">
           <HeroSection onCreateClick={handleCreateClick} />
           <PoolStats />

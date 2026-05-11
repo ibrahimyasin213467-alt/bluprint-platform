@@ -5,7 +5,6 @@ import { useState, useEffect, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
 import SuccessModal from "../components/SuccessModal";
@@ -272,7 +271,7 @@ function CreatePageContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <Navbar mounted={mounted} />
+        
         <div className="pt-28 max-w-6xl mx-auto px-4 pb-16">
           
           {/* İLK 100 BANNER */}

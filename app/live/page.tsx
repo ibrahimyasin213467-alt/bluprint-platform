@@ -2,220 +2,235 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Navbar from "../components/Navbar";
+import { useWallet } from "@solana/wallet-adapter-react";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
-import { useToast } from "../components/ToastProvider";
-import { useI18n } from "../lib/i18n-provider";
 
-interface Token {
-  mint: string;
-  name: string;
-  symbol: string;
-  createdAt: string;
-  image?: string;
-  twitter?: string;
-  telegram?: string;
-  website?: string;
+interface Activity {
+  id: string;
+  type: "token" | "vip" | "premium" | "boost" | "referral" | "announcement";
+  wallet?: string;
+  tokenName?: string;
+  tokenSymbol?: string;
+  amount?: number;
+  message?: string;
+  timestamp: number;
+}
+
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
 }
 
 export default function LivePage() {
-  const { showToast } = useToast();
-  const { t } = useI18n();
-  const [tokens, setTokens] = useState<Token[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  const [newTokenMint, setNewTokenMint] = useState<string | null>(null);
-
-  useEffect(() => setMounted(true), []);
+  const { publicKey } = useWallet();
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([
+    {
+      id: "1",
+      title: "🔥 Launch Day: May 14th!",
+      content: "Token creation starts on May 14th. Preregister now for VIP benefits!",
+      createdAt: Date.now(),
+    },
+    {
+      id: "2",
+      title: "💰 Referral System Active",
+      content: "Earn 0.05 SOL per referral! Share your code and start earning.",
+      createdAt: Date.now() - 86400000,
+    },
+    {
+      id: "3",
+      title: "👑 VIP Benefits Announced",
+      content: "VIP members get 0.10 SOL monthly airdrop for life!",
+      createdAt: Date.now() - 172800000,
+    },
+  ]);
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: "", content: "" });
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const fetchTokens = async () => {
-      try {
-        const res = await fetch("/api/track-token");
-        const data = await res.json();
-        if (data.success) {
-          const oldMints = tokens.map(t => t.mint);
-          const newTokens = data.tokens.filter((t: Token) => !oldMints.includes(t.mint));
-          if (newTokens.length > 0 && newTokens[0]) {
-            setNewTokenMint(newTokens[0].mint);
-            setTimeout(() => setNewTokenMint(null), 5000);
-          }
-          setTokens(data.tokens);
-        }
-      } catch (err) {
-        console.error("Token list error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTokens();
-    const interval = setInterval(fetchTokens, 10000);
-    return () => clearInterval(interval);
-  }, [tokens]);
+    // Check if user is admin
+    if (publicKey) {
+      const adminWallets = [
+        "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x",
+        "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc",
+      ];
+      setIsAdmin(adminWallets.includes(publicKey.toString()));
+    }
+  }, [publicKey]);
 
-  const copyToClipboard = (text: string, name: string) => {
-    navigator.clipboard.writeText(text);
-    showToast(`✅ ${name} ${t('live_copy')}!`, "success");
+  useEffect(() => {
+    // Simulate real-time activities
+    const demoActivities: Activity[] = [
+      { id: "1", type: "token", wallet: "8x3k7...p9Q", tokenName: "BLUEP", tokenSymbol: "BLUEP", amount: 0.15, timestamp: Date.now() - 300000 },
+      { id: "2", type: "vip", wallet: "5m9j2...r4L", timestamp: Date.now() - 600000 },
+      { id: "3", type: "premium", wallet: "2n7k4...t8R", timestamp: Date.now() - 900000 },
+      { id: "4", type: "referral", wallet: "9x3p1...s2M", amount: 0.05, timestamp: Date.now() - 1200000 },
+      { id: "5", type: "boost", wallet: "7k2m5...v6N", tokenName: "MEME", amount: 0.1, timestamp: Date.now() - 1800000 },
+    ];
+    setActivities(demoActivities);
+
+    // Fetch real activities from API later
+    // fetchActivities();
+    // fetchAnnouncements();
+  }, []);
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case "token": return "🔥";
+      case "vip": return "👑";
+      case "premium": return "⭐";
+      case "boost": return "🪙";
+      case "referral": return "💰";
+      case "announcement": return "📢";
+      default: return "📌";
+    }
   };
 
-  const getTokenImage = (token: Token) => {
-    if (token.image && token.image.trim() !== '') {
-      if (token.image.startsWith('http')) {
-        return token.image;
-      }
-      return token.image;
+  const getActivityColor = (type: string) => {
+    switch (type) {
+      case "token": return "text-orange-500";
+      case "vip": return "text-yellow-500";
+      case "premium": return "text-blue-400";
+      case "boost": return "text-purple-500";
+      case "referral": return "text-green-500";
+      case "announcement": return "text-cyan-500";
+      default: return "text-gray-400";
     }
-    return "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png";
+  };
+
+  const getActivityMessage = (activity: Activity) => {
+    switch (activity.type) {
+      case "token":
+        return `New token "${activity.tokenName}" (${activity.tokenSymbol}) created by ${activity.wallet}`;
+      case "vip":
+        return `${activity.wallet} became VIP member! 👑`;
+      case "premium":
+        return `${activity.wallet} joined as Premium member ⭐`;
+      case "boost":
+        return `Token "${activity.tokenName}" boosted with ${activity.amount} SOL by ${activity.wallet}`;
+      case "referral":
+        return `${activity.wallet} earned ${activity.amount} SOL from referral`;
+      default:
+        return "Activity occurred";
+    }
+  };
+
+  const formatTime = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+  };
+
+  const handlePostAnnouncement = () => {
+    if (!newAnnouncement.title || !newAnnouncement.content) return;
+    
+    const announcement: Announcement = {
+      id: Date.now().toString(),
+      title: newAnnouncement.title,
+      content: newAnnouncement.content,
+      createdAt: Date.now(),
+    };
+    
+    setAnnouncements([announcement, ...announcements]);
+    setNewAnnouncement({ title: "", content: "" });
   };
 
   return (
     <PageTransition>
-      <div className="relative min-h-screen">
-        <Navbar mounted={mounted} />
-        <div className="pt-28 max-w-6xl mx-auto px-4 pb-16">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <span className="text-red-500 animate-pulse">●</span>
-              {t('live_title')}
-            </h1>
-            <div className="text-sm text-gray-500 dark:text-gray-400">{t('live_last')}</div>
+      <div className="min-h-screen bg-gray-950">
+        <div className="pt-6 px-6">
+          
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-white">📢 Live Feed</h1>
+            <p className="text-gray-500 text-sm">Real-time platform activity and announcements</p>
           </div>
 
-          {loading ? (
-            <div className="text-center py-20">
-              <div className="animate-spin inline-block w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full" />
-              <p className="mt-3 text-gray-500 dark:text-gray-400">{t('live_loading')}</p>
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left: Activity Feed */}
+            <div className="lg:col-span-2">
+              <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800">
+                  <h2 className="font-semibold text-white">🕒 Live Activity Feed</h2>
+                </div>
+                <div className="divide-y divide-gray-800 max-h-[600px] overflow-y-auto">
+                  <AnimatePresence>
+                    {activities.map((activity) => (
+                      <motion.div
+                        key={activity.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="px-4 py-3 hover:bg-gray-800/50 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`text-xl ${getActivityColor(activity.type)}`}>
+                            {getActivityIcon(activity.type)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-300">{getActivityMessage(activity)}</p>
+                            <p className="text-xs text-gray-600 mt-1">{formatTime(activity.timestamp)}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
             </div>
-          ) : tokens.length === 0 ? (
-            <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
-              <div className="text-5xl mb-3">🚀</div>
-              <p className="text-gray-500 dark:text-gray-400">{t('live_empty')}</p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('live_empty_hint')}</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tokens.map((token, index) => {
-                const isNew = newTokenMint === token.mint;
-                const hasSocial = token.twitter || token.telegram || token.website;
-                
-                return (
-                  <motion.div
-                    key={token.mint}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.05, duration: 0.3 }}
-                    className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-gray-700 overflow-hidden"
-                  >
-                    <AnimatePresence>
-                      {isNew && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="absolute top-2 left-2 z-10"
-                        >
-                          <div className="relative">
-                            <div className="absolute inset-0 bg-orange-500 rounded-full blur-xl animate-ping opacity-75" />
-                            <span className="relative text-3xl drop-shadow-lg">🔥</span>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
 
-                    <div className="p-5">
-                      <div className="flex items-center gap-3 mb-3">
-                        <img
-                          src={getTokenImage(token)}
-                          alt={token.name}
-                          className="w-12 h-12 rounded-xl object-cover border border-gray-200 dark:border-gray-700 bg-white"
-                          onError={(e) => {
-                            e.currentTarget.src = "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png";
-                          }}
-                        />
-                        <div>
-                          <div className="font-bold text-gray-900 dark:text-white text-lg">
-                            {token.name}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {token.symbol}
-                          </div>
-                        </div>
+            {/* Right: Announcements */}
+            <div>
+              <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800">
+                  <h2 className="font-semibold text-white">📢 Announcements</h2>
+                </div>
+                <div className="divide-y divide-gray-800 max-h-[600px] overflow-y-auto">
+                  {announcements.map((ann) => (
+                    <div key={ann.id} className="px-4 py-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-cyan-500 text-sm">📢</span>
+                        <h3 className="font-medium text-white text-sm">{ann.title}</h3>
                       </div>
-
-                      {/* MINT ADRESİ + KOPYALAMA BUTONU */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="flex-1 text-xs text-gray-400 font-mono break-all bg-gray-50 dark:bg-gray-900 p-2 rounded-lg">
-                          {token.mint.slice(0, 12)}...{token.mint.slice(-8)}
-                        </div>
-                        <button
-                          onClick={() => copyToClipboard(token.mint, token.name)}
-                          className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
-                          title={t('live_copy')}
-                        >
-                          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                      </div>
-
-                      {hasSocial && (
-                        <div className="flex justify-center gap-3 mb-3 pt-1 border-t border-gray-100 dark:border-gray-700">
-                          {token.twitter && (
-                            <a
-                              href={token.twitter.startsWith('http') ? token.twitter : `https://${token.twitter}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-500 hover:text-blue-400 transition text-lg"
-                              title="Twitter/X"
-                            >
-                              🐦
-                            </a>
-                          )}
-                          {token.telegram && (
-                            <a
-                              href={token.telegram.startsWith('http') ? token.telegram : `https://${token.telegram}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-500 hover:text-sky-500 transition text-lg"
-                              title="Telegram"
-                            >
-                              💬
-                            </a>
-                          )}
-                          {token.website && (
-                            <a
-                              href={token.website.startsWith('http') ? token.website : `https://${token.website}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-500 hover:text-green-500 transition text-lg"
-                              title="Website"
-                            >
-                              🌐
-                            </a>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex justify-between items-center mt-2">
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500">
-                          {new Date(token.createdAt).toLocaleString()}
-                        </div>
-                        <button
-                          onClick={() => window.open(`https://jup.ag/swap/SOL-${token.mint}`, "_blank")}
-                          className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-full transition flex items-center gap-1 text-sm"
-                        >
-                          <span>💰</span>
-                          {t('live_buy')} {token.symbol}
-                        </button>
-                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{ann.content}</p>
+                      <p className="text-xs text-gray-600 mt-2">{formatTime(ann.createdAt)}</p>
                     </div>
-                  </motion.div>
-                );
-              })}
+                  ))}
+                </div>
+              </div>
+
+              {/* Admin Announcement Form */}
+              {isAdmin && (
+                <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 mt-4">
+                  <h3 className="font-semibold text-white text-sm mb-3">✏️ Post Announcement</h3>
+                  <input
+                    type="text"
+                    placeholder="Title"
+                    value={newAnnouncement.title}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 mb-2"
+                  />
+                  <textarea
+                    placeholder="Content"
+                    value={newAnnouncement.content}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
+                    rows={2}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 mb-2"
+                  />
+                  <button
+                    onClick={handlePostAnnouncement}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition"
+                  >
+                    Post Announcement
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
         <Footer />
       </div>
