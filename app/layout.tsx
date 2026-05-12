@@ -10,12 +10,10 @@ const sora = Sora({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "BluPrint - Solana Meme Coin Launchpad",
-  description: "Create your own Solana meme coin in 10 seconds. No code. Secure token with 3 revokes.",
-  keywords: "solana, meme coin, token creator, crypto launchpad, solana token, bluprint",
-  authors: [{ name: "BluPrint" }],
-  creator: "BluPrint",
-  publisher: "BluPrint",
-  robots: "index, follow",
+  description: "Create your own Solana meme coin in 10 seconds.",
+  icons: {
+    icon: "/favicon.ico",
+  },
   openGraph: {
     title: "BluPrint - Solana Meme Coin Launchpad",
     description: "Create your own Solana meme coin in 10 seconds.",
@@ -32,9 +30,6 @@ export const metadata: Metadata = {
     images: ["https://bluprint.fun/favicon.ico"],
     creator: "@bluprint",
   },
-  icons: {
-    icon: "/favicon.ico",
-  },
 };
 
 export default function RootLayout({
@@ -48,17 +43,17 @@ export default function RootLayout({
         <Providers>
           <Background />
           
-          {/* Banner - sabit üstte, en düşük z-index */}
+          {/* Banner - sabit üstte */}
           <div className="fixed top-0 left-0 right-0 z-10">
             <MarqueeBanner />
           </div>
           
-          {/* Sidebar - banner'ın altından başlar, daha yüksek z-index */}
+          {/* Sidebar - banner'ın altından başlar */}
           <div className="fixed top-10 left-0 bottom-0 z-20">
             <Sidebar />
           </div>
           
-          {/* Ana içerik - banner ve sidebar kadar boşluk */}
+          {/* Ana içerik */}
           <main className="md:ml-56 pt-14 min-h-screen">
             {children}
           </main>

@@ -48,9 +48,14 @@ export default function Sidebar() {
     <>
       {/* Logo */}
       <div className="px-4 py-6 border-b border-gray-800">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
-            <span className="text-white font-bold text-lg">BP</span>
+        <Link href="/" className="flex items-center gap-3">
+          {/* Favicon logosu */}
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 overflow-hidden">
+            <img 
+              src="/favicon.ico" 
+              alt="BluPrint" 
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <span className="text-white font-bold text-lg tracking-tight">BluPrint</span>
@@ -113,17 +118,17 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar - banner'ın altından başlasın (top-10) */}
+      {/* Desktop Sidebar */}
       <aside className="fixed left-0 top-10 h-full w-56 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 z-40 hidden md:flex flex-col">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Header - banner'ın altından başlasın (top-10) */}
+      {/* Mobile Header */}
       <div className="fixed top-10 left-0 right-0 z-30 md:hidden bg-gray-900/95 backdrop-blur-xl border-b border-gray-800">
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-sm">BP</span>
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
+              <img src="/favicon.ico" alt="BluPrint" className="w-full h-full object-cover" />
             </div>
             <span className="text-white font-bold text-lg">BluPrint</span>
           </Link>
