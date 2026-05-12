@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { useState, useEffect, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useSearchParams } from "next/navigation";
 import { Connection, Transaction } from "@solana/web3.js";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,8 +14,11 @@ import { useToast } from "../components/ToastProvider";
 import CountdownTimer from "../components/CountdownTimer";
 import { useI18n } from "../lib/i18n-provider";
 
+const RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+
 function CreatePageContent() {
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
   const { t } = useI18n();
@@ -25,13 +29,11 @@ function CreatePageContent() {
   const [successData, setSuccessData] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState("");
-  const [estimatedTime, setEstimatedTime] = useState(0);
   const [time, setTime] = useState(0);
   const [mintAddress, setMintAddress] = useState("");
-  const [tokenCount, setTokenCount] = useState<number | null>(null);
   const [tokensLeft, setTokensLeft] = useState(100);
 
-  // Form state
+  // Form
   const [tokenName, setTokenName] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
   const [tokenSupply, setTokenSupply] = useState(1_000_000_000);
@@ -57,24 +59,15 @@ function CreatePageContent() {
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    const fetchTokenCount = async () => {
-      try {
-        const res = await fetch("/api/token-stats");
-        const data = await res.json();
-        if (data.success) {
-          setTokenCount(data.totalTokens);
-          setTokensLeft(data.tokensLeft);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchTokenCount();
+    fetch("/api/token-stats")
+      .then(r => r.json())
+      .then(data => { if (data.success) setTokensLeft(data.tokensLeft); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (validReferrer) showToast(t('toast_referral'), "info");
-  }, [validReferrer, showToast, t]);
+  }, [validReferrer]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,10 +83,10 @@ function CreatePageContent() {
         setPreviewImage(URL.createObjectURL(file));
         showToast(t('toast_upload_success'), "success");
       } else {
-        showToast(`${t('toast_upload_error')}: ${data.error}`, "error");
+        showToast(`❌ ${data.error}`, "error");
       }
     } catch (err: any) {
-      showToast(`${t('toast_upload_error')}: ${err.message}`, "error");
+      showToast(`❌ ${err.message}`, "error");
     }
   };
 
@@ -109,7 +102,7 @@ function CreatePageContent() {
   const createToken = async () => {
     if (isProcessing || loading) return;
     if (!publicKey) {
-      showToast(t('toast_connect'), "warning");
+      setVisible(true);
       return;
     }
 
@@ -123,7 +116,6 @@ function CreatePageContent() {
     setLoading(true);
     setProgress(0);
     setStep("🚀 Initializing...");
-    setEstimatedTime(5);
     setStatus("Preparing token...");
 
     const start = Date.now();
@@ -131,34 +123,15 @@ function CreatePageContent() {
 
     if (progressInterval.current) clearInterval(progressInterval.current);
     progressInterval.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) return 95;
+      setProgress(prev => {
+        if (prev >= 90) return 90;
         const elapsed = (Date.now() - start) / 1000;
-        const newProgress = Math.min(95, Math.floor((elapsed / 5) * 100));
-        setEstimatedTime(Math.max(1, Math.ceil(5 - elapsed)));
-        return newProgress;
+        return Math.min(90, Math.floor((elapsed / 8) * 100));
       });
     }, 100);
 
-    const steps = [
-      { progress: 10, text: "🔍 Validating inputs..." },
-      { progress: 25, text: "📦 Preparing mint account..." },
-      { progress: 40, text: "💰 Processing fee..." },
-      { progress: 55, text: "🪙 Creating token account..." },
-      { progress: 70, text: "⚡ Minting supply..." },
-      { progress: 85, text: "🔒 Finalizing transaction..." },
-    ];
-
-    let stepIndex = 0;
-    const stepInterval = setInterval(() => {
-      if (stepIndex < steps.length && progress >= steps[stepIndex].progress) {
-        setStep(steps[stepIndex].text);
-        stepIndex++;
-      }
-    }, 200);
-
     try {
-      // 1. API'den transaction'ı al
+      // 1. API'den transaction al
       const res = await fetch("/api/create-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -186,32 +159,30 @@ function CreatePageContent() {
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
-      // 2. Transaction'ı deserialize et
+      // 2. Transaction deserialize
       const transaction = Transaction.from(Buffer.from(data.transaction, 'base64'));
 
-      // 3. Connection ve blockhash al
-      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.mainnet-beta.solana.com';
-      const connection = new Connection(rpcUrl, 'confirmed');
-      const { blockhash } = await connection.getLatestBlockhash();
+      // 3. Connection
+      const connection = new Connection(RPC_URL, 'confirmed');
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // 4. Phantom'a gönder ve imzala
-      setStep("📝 Sign transaction in wallet...");
+      // 4. Cüzdana gönder
+      setStep("📝 Sign in your wallet...");
+      setProgress(92);
       const signature = await sendTransaction(transaction, connection);
-      
+
       // 5. Onay bekle
-      setStep("⏳ Waiting for confirmation...");
-      const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-      if (confirmation.value.err) throw new Error('Transaction failed');
+      setStep("⏳ Confirming...");
+      setProgress(96);
+      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
 
-      clearInterval(progressInterval.current);
-      clearInterval(stepInterval);
+      clearInterval(progressInterval.current!);
       setProgress(100);
-      setStep("✅ Done! Your token is ready.");
+      setStep("✅ Done!");
 
-      const end = Date.now();
-      setTime((end - start) / 1000);
+      setTime((Date.now() - start) / 1000);
       setMintAddress(data.mintAddress);
       setSuccessData({
         mint: data.mintAddress,
@@ -229,16 +200,15 @@ function CreatePageContent() {
       });
       setStatus("");
       showToast(t('toast_created'), "success");
+
     } catch (err: any) {
-      clearInterval(progressInterval.current);
-      clearInterval(stepInterval);
+      clearInterval(progressInterval.current!);
       setStatus(`❌ ${err.message}`);
       setProgress(0);
       showToast(`❌ ${err.message}`, "error");
     } finally {
       setLoading(false);
       setIsProcessing(false);
-      if (progressInterval.current) clearInterval(progressInterval.current);
     }
   };
 
@@ -255,9 +225,7 @@ function CreatePageContent() {
           setRevokeMint(false);
           setRevokeFreeze(false);
           setRevokeUpdate(false);
-          setTwitter("");
-          setTelegram("");
-          setWebsite("");
+          setTwitter(""); setTelegram(""); setWebsite("");
           setShowSocialLinks(false);
           setPromoCodeInput("");
         }}
@@ -266,119 +234,264 @@ function CreatePageContent() {
     );
   }
 
-  const isFirstHundred = tokensLeft && tokensLeft > 0;
-  const displayFee = 0.15;
-
   return (
     <PageTransition>
-      <div className="relative min-h-screen">
-        <div className="pt-28 max-w-6xl mx-auto px-4 pb-16">
-          
-          {isFirstHundred && (
+      <div className="relative min-h-screen bg-gray-50 dark:bg-gray-950">
+        <div className="pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
+
+          {/* BANNER */}
+          {tokensLeft > 0 && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 text-white text-center relative overflow-hidden"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-3 sm:p-4 text-white text-center"
             >
-              <div className="absolute inset-0 bg-white/10 animate-pulse" />
-              <div className="relative z-10 flex items-center justify-center gap-3 flex-wrap">
-                <span className="text-3xl animate-bounce">🎁</span>
-                <span className="font-bold">{t('pool_title')}</span>
-                <span className="text-3xl animate-bounce delay-100">🎁</span>
+              <div className="flex items-center justify-center gap-2 flex-wrap text-sm sm:text-base font-bold">
+                <span>🎁</span>
+                <span>{t('pool_title')}</span>
+                <span>🎁</span>
               </div>
-              <div className="relative z-10 text-sm mt-1">
-                ⚡ {t('pool_first')} <span className="font-bold text-xl">{tokensLeft}</span> {t('pool_tokens')}: <span className="font-bold text-xl">0.15 SOL</span>
+              <div className="text-xs sm:text-sm mt-1">
+                ⚡ {t('pool_first')} <span className="font-bold text-lg">{tokensLeft}</span> {t('pool_tokens')}: <span className="font-bold">0.15 SOL</span>
               </div>
             </motion.div>
           )}
 
-          {isFirstHundred && <CountdownTimer tokensLeft={tokensLeft} />}
+          {tokensLeft > 0 && <CountdownTimer tokensLeft={tokensLeft} />}
 
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{t('create_title')}</h2>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">{t('create_subtitle')}</p>
+          {/* BAŞLIK */}
+          <div className="text-center mb-6 sm:mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{t('create_title')}</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm sm:text-base">{t('create_subtitle')}</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          {/* FORM + PANEL */}
+          <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-8">
+
             {/* FORM */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 md:p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-5">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 sm:p-8 space-y-4 sm:space-y-6">
+
+              {/* Ad + Sembol */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_name_label')}</label>
-                  <input type="text" value={tokenName} onChange={(e) => setTokenName(e.target.value)} placeholder={t('create_name_placeholder')} className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_name_label')}</label>
+                  <input
+                    type="text"
+                    value={tokenName}
+                    onChange={e => setTokenName(e.target.value)}
+                    placeholder={t('create_name_placeholder')}
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_symbol_label')}</label>
-                  <input type="text" value={tokenSymbol} onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())} placeholder={t('create_symbol_placeholder')} className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 uppercase" />
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_symbol_label')}</label>
+                  <input
+                    type="text"
+                    value={tokenSymbol}
+                    onChange={e => setTokenSymbol(e.target.value.toUpperCase())}
+                    placeholder={t('create_symbol_placeholder')}
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_supply_label')}</label>
-                <input type="number" value={tokenSupply} onChange={(e) => setTokenSupply(Number(e.target.value))} className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
+              {/* Supply + Decimals */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-5">
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_supply_label')}</label>
+                  <input
+                    type="number"
+                    value={tokenSupply}
+                    onChange={e => setTokenSupply(Number(e.target.value))}
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_decimals_label')}</label>
+                  <input
+                    type="number"
+                    value={tokenDecimals}
+                    onChange={e => setTokenDecimals(Number(e.target.value))}
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none"
+                  />
+                </div>
               </div>
 
+              {/* Logo */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_decimals_label')}</label>
-                <input type="number" value={tokenDecimals} onChange={(e) => setTokenDecimals(Number(e.target.value))} className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_logo_label')}</label>
-                <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 bg-gray-50 dark:bg-gray-800" onClick={() => fileInputRef.current?.click()}>
-                  {previewImage ? <img src={previewImage} alt="Preview" className="w-16 h-16 mx-auto rounded-xl object-cover" /> : <div className="text-gray-400 dark:text-gray-500">{t('create_logo_placeholder')}</div>}
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_logo_label')}</label>
+                <div
+                  className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-blue-400 transition"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {previewImage ? (
+                    <img src={previewImage} alt="Preview" className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-xl object-cover" />
+                  ) : (
+                    <div className="text-gray-400 dark:text-gray-500 text-sm">{t('create_logo_placeholder')}</div>
+                  )}
                   <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={handleFileUpload} className="hidden" />
                 </div>
               </div>
 
+              {/* Açıklama */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_desc_label')}</label>
-                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('create_desc_placeholder')} className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create_desc_label')}</label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder={t('create_desc_placeholder')}
+                  className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none resize-none"
+                />
               </div>
 
+              {/* Promo Code */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">🎫 {t('common_promo')} ({t('common_optional')})</label>
-                <input type="text" value={promoCodeInput} onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())} placeholder={t('create_promo_placeholder')} className="w-full h-12 px-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 uppercase" />
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">🎫 {t('common_promo')} <span className="text-gray-400">({t('common_optional')})</span></label>
+                <input
+                  type="text"
+                  value={promoCodeInput}
+                  onChange={e => setPromoCodeInput(e.target.value.toUpperCase())}
+                  placeholder={t('create_promo_placeholder')}
+                  className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+                />
               </div>
             </div>
 
             {/* LAUNCH PANEL */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 md:p-8 sticky top-28">
-              <div className="text-center mb-6">
-                <div className="text-5xl mb-2">⚡</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{t('create_launch')}</div>
-                {isFirstHundred && <div className="inline-flex items-center gap-1 mt-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-3 py-1 rounded-full text-xs">🎁 {t('create_first100')}</div>}
-                <div className="mt-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('create_launch_fee')}</span><span className="font-bold text-green-600">{displayFee} {t('common_sol')}</span></div>
-                  <div className="border-t pt-2 mt-2"><div className="flex justify-between font-semibold"><span>{t('create_total_fee')}</span><span className="text-green-600 font-bold text-lg">{displayFee} {t('common_sol')}</span></div></div>
-                </div>
-              </div>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 sm:p-8 lg:sticky lg:top-28 space-y-4">
 
-              {/* Secure Token */}
-              <div className="rounded-xl p-5 mb-6 bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3"><label className="text-base font-bold text-white flex items-center gap-2">🔒 {t('create_secure_label')}</label><span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold animate-pulse">⭐ {t('common_free')} ⭐</span></div>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 text-sm text-white/90 cursor-pointer"><input type="checkbox" checked={revokeMint} onChange={(e) => setRevokeMint(e.target.checked)} className="w-4 h-4 rounded" /><span>🚫 Revoke Mint Authority</span><span className="text-[10px] text-white/60">(No new tokens)</span></label>
-                      <label className="flex items-center gap-2 text-sm text-white/90 cursor-pointer"><input type="checkbox" checked={revokeFreeze} onChange={(e) => setRevokeFreeze(e.target.checked)} className="w-4 h-4 rounded" /><span>❄️ Revoke Freeze Authority</span><span className="text-[10px] text-white/60">(No account freezes)</span></label>
-                      <label className="flex items-center gap-2 text-sm text-white/90 cursor-pointer"><input type="checkbox" checked={revokeUpdate} onChange={(e) => setRevokeUpdate(e.target.checked)} className="w-4 h-4 rounded" /><span>📝 Revoke Update Authority</span><span className="text-[10px] text-white/60">(Immutable metadata)</span></label>
-                    </div>
+              {/* Başlık */}
+              <div className="text-center">
+                <div className="text-4xl mb-1">⚡</div>
+                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{t('create_launch')}</div>
+                {tokensLeft > 0 && (
+                  <div className="inline-flex items-center gap-1 mt-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-3 py-1 rounded-full text-xs font-medium">
+                    🎁 {t('create_first100')}
+                  </div>
+                )}
+                <div className="mt-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">{t('create_launch_fee')}</span>
+                    <span className="font-bold text-green-600">0.15 SOL</span>
+                  </div>
+                  <div className="border-t dark:border-gray-700 pt-2 flex justify-between font-semibold">
+                    <span className="text-gray-700 dark:text-gray-300">{t('create_total_fee')}</span>
+                    <span className="text-green-600 font-bold text-lg">0.15 SOL</span>
                   </div>
                 </div>
               </div>
 
-              <button onClick={() => setShowSocialLinks(!showSocialLinks)} className="w-full mb-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2"><span>🌐</span> {t('create_social_button')}<span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{t('common_free')}</span></button>
+              {/* Revoke seçenekleri */}
+              <div className="rounded-xl p-4 sm:p-5 bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <span className="text-base font-bold text-white">🔒 {t('create_secure_label')}</span>
+                  <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold">⭐ {t('common_free')} ⭐</span>
+                </div>
+                <div className="space-y-2.5">
+                  {[
+                    { label: "🚫 Revoke Mint Authority", sub: "(No new tokens)", val: revokeMint, set: setRevokeMint },
+                    { label: "❄️ Revoke Freeze Authority", sub: "(No account freezes)", val: revokeFreeze, set: setRevokeFreeze },
+                    { label: "📝 Revoke Update Authority", sub: "(Immutable metadata)", val: revokeUpdate, set: setRevokeUpdate },
+                  ].map(item => (
+                    <label key={item.label} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={item.val}
+                        onChange={e => item.set(e.target.checked)}
+                        className="w-4 h-4 rounded flex-shrink-0"
+                      />
+                      <span className="text-sm text-white/90">{item.label}</span>
+                      <span className="text-[10px] text-white/60 hidden sm:inline">{item.sub}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-              <AnimatePresence>{showSocialLinks && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4"><div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl"><input type="url" value={twitter} onChange={(e) => setTwitter(e.target.value)} placeholder={t('create_twitter')} className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900" /><input type="url" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder={t('create_telegram')} className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900" /><input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder={t('create_website')} className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900" /></div></motion.div>)}</AnimatePresence>
+              {/* Sosyal linkler */}
+              <button
+                onClick={() => setShowSocialLinks(!showSocialLinks)}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2 text-sm"
+              >
+                🌐 {t('create_social_button')}
+                <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{t('common_free')}</span>
+              </button>
 
-              <button onClick={createToken} disabled={!publicKey || loading} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-4 rounded-xl shadow-lg disabled:opacity-50">{loading ? t('create_deploying') : t('create_button')}</button>
+              <AnimatePresence>
+                {showSocialLinks && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                      {[
+                        { val: twitter, set: setTwitter, placeholder: t('create_twitter') },
+                        { val: telegram, set: setTelegram, placeholder: t('create_telegram') },
+                        { val: website, set: setWebsite, placeholder: t('create_website') },
+                      ].map(item => (
+                        <input
+                          key={item.placeholder}
+                          type="url"
+                          value={item.val}
+                          onChange={e => item.set(e.target.value)}
+                          placeholder={item.placeholder}
+                          className="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white outline-none"
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-              {status && <div className="text-sm text-center text-gray-500 dark:text-gray-400 mt-4">{status}</div>}
+              {/* Ana buton */}
+              {mounted && (
+                <button
+                  onClick={createToken}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-lg transition text-sm sm:text-base"
+                >
+                  {loading
+                    ? t('create_deploying')
+                    : !connected
+                    ? t('nav_connect')
+                    : t('create_button')}
+                </button>
+              )}
 
-              {isProcessing && (<motion.div className="mt-6 space-y-3"><div className="relative"><div className="bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden"><motion.div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full" style={{ width: `${progress}%` }} /></div></div><div className="flex justify-between items-center text-xs"><span className="text-gray-500 dark:text-gray-400">{step}</span><span className="text-blue-600 font-mono">{Math.floor(progress)}%</span></div></motion.div>)}
+              {/* İlerleme */}
+              {isProcessing && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-2"
+                >
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+                    <motion.div
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full"
+                      style={{ width: `${progress}%` }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>{step}</span>
+                    <span className="font-mono text-blue-600">{Math.floor(progress)}%</span>
+                  </div>
+                </motion.div>
+              )}
 
-              {validReferrer && <div className="mt-4 text-xs text-center text-green-600 dark:text-green-400">🎉 {t('create_referral_active')}</div>}
+              {status && (
+                <div className="text-xs sm:text-sm text-center text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
+                  {status}
+                </div>
+              )}
+
+              {validReferrer && (
+                <div className="text-xs text-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl p-2">
+                  🎉 {t('create_referral_active')}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -390,7 +503,7 @@ function CreatePageContent() {
 
 export default function CreatePage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen text-gray-500">Loading...</div>}>
       <CreatePageContent />
     </Suspense>
   );
