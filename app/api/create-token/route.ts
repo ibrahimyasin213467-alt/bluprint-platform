@@ -236,6 +236,10 @@ export async function POST(req: NextRequest) {
         }
 
         await redis.set(earningsKey, JSON.stringify(data));
+        
+        // ========== REFERRAL AKTİVİTESİ ==========
+        await addActivity('referral', finalReferrer, { amount: REFERRAL_REWARD / LAMPORTS_PER_SOL });
+        
       } catch (e) {
         console.log('Invalid referrer:', e);
       }
@@ -368,8 +372,8 @@ export async function POST(req: NextRequest) {
 
     logCreation(userPublicKey, true, mintKeypair.publicKey.toBase58(), undefined, ip);
     
-    // ========== AKTİVİTE EKLE ==========
-    await addActivity('token', userPublicKey, { tokenName: name });
+    // ========== TOKEN AKTİVİTESİ ==========
+    await addActivity('token', userPublicKey, { tokenName: name, tokenSymbol: symbol });
     
     await unlockWallet(userPublicKey);
 
