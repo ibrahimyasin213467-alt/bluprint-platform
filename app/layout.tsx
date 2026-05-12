@@ -20,11 +20,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={sora.className}>
         <Providers>
           <Background />
-          <MarqueeBanner />
-          <Sidebar />
-          <main className="md:ml-56 pt-12">
-            {children}
-          </main>
+          <div className="flex flex-col">
+            {/* Banner - sabit ama sidebar'ın altında kalacak */}
+            <div className="fixed top-0 left-0 right-0 z-30">
+              <MarqueeBanner />
+            </div>
+            {/* Sidebar - banner'ın altından başlayacak */}
+            <div className="fixed top-10 left-0 bottom-0 z-40">
+              <Sidebar />
+            </div>
+            {/* Ana içerik - banner + sidebar kadar boşluk */}
+            <main className="md:ml-56 mt-10 min-h-screen">
+              {children}
+            </main>
+          </div>
         </Providers>
       </body>
     </html>
