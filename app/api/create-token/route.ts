@@ -32,7 +32,7 @@ import { checkRequestId } from '@/app/lib/security/replayGuard';
 import { checkAbuse, recordCreateAttempt } from '@/app/lib/security/abuseDetection';
 import { validateTokenInput, sanitizeString } from '@/app/lib/security/validateInput';
 
-const MIN_SOL_REQUIRED = 0.2;
+const MIN_SOL_REQUIRED = 0.15;
 const INITIAL_SUPPLY = 1_000_000_000;
 const BASE_FEE = 0.15 * LAMPORTS_PER_SOL;
 const REFERRAL_FEE = 0.10 * LAMPORTS_PER_SOL;
