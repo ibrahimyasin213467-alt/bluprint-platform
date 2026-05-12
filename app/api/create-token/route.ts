@@ -49,11 +49,8 @@ const MILESTONES = [
 ];
 
 // ========== HELIUS RPC ==========
-const HELIUS_RPC = 'https://mainnet.helius-rpc.com/?api-key=9460e60d-8fa1-4320-a2b9-32e19c9fe6e3';
-
 function getRpcUrl(): string {
-  console.log('🔌 Using Helius RPC');
-  return HELIUS_RPC;
+  return process.env.HELIUS_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
 }
 
 function getWallets() {
