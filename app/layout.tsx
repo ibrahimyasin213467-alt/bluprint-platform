@@ -3,6 +3,7 @@ import { Sora } from "next/font/google";
 import Providers from "./providers";
 import Background from "./components/Background";
 import Sidebar from "./components/Sidebar";
+import MarqueeBanner from "./components/MarqueeBanner";
 import "./globals.css";
 
 const sora = Sora({ subsets: ["latin"] });
@@ -19,8 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={sora.className}>
         <Providers>
           <Background />
+          <MarqueeBanner />
           <Sidebar />
-          <main className="md:ml-56 min-h-screen">
+          <main className="md:ml-56 pt-12">
             {children}
           </main>
         </Providers>

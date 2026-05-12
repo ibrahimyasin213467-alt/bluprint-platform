@@ -80,3 +80,24 @@
 html {
   scroll-behavior: smooth;
 }
+
+/* ==================== KAYAN BANNER ANİMASYONU ==================== */
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.33%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+  display: inline-flex;
+}
+
+/* Banner hover'da yavaşlama (opsiyonel) */
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
