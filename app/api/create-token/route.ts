@@ -47,25 +47,12 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ========== RPC URL - GARANTİLİ (4 KATMANLI FALLBACK) ==========
+// ========== ALCHEMY RPC - SON VE KESİN ==========
+const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+
 function getRpcUrl(): string {
-  // 1. Sabit QuickNode URL (öncelikli)
-  const quicknodeUrl = 'https://sly-young-violet.solana-mainnet.quiknode.pro/65e48c9aeb45ba600bf8f5476653b0817f2e30b3/';
-  
-  // 2. Env'den HELIUS_RPC_URL
-  const heliusUrl = process.env.HELIUS_RPC_URL;
-  
-  // 3. Env'den NEXT_PUBLIC_RPC_URL
-  const publicUrl = process.env.NEXT_PUBLIC_RPC_URL;
-  
-  // 4. Public fallback
-  const fallbackUrl = 'https://api.mainnet-beta.solana.com';
-  
-  // Önce env'leri dene, yoksa sabiti kullan
-  const selectedUrl = heliusUrl || publicUrl || quicknodeUrl || fallbackUrl;
-  
-  console.log('🔌 RPC:', selectedUrl.substring(0, 60) + '...');
-  return selectedUrl;
+  console.log('🔌 Using Alchemy RPC');
+  return ALCHEMY_RPC;
 }
 
 function getWallets() {
