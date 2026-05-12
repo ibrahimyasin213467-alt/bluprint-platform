@@ -48,11 +48,12 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ========== ALCHEMY RPC ==========
-const RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+// ========== HELIUS RPC ==========
+const HELIUS_RPC = 'https://mainnet.helius-rpc.com/?api-key=9460e60d-8fa1-4320-a2b9-32e19c9fe6e3';
 
 function getRpcUrl(): string {
-  return RPC_URL;
+  console.log('🔌 Using Helius RPC');
+  return HELIUS_RPC;
 }
 
 function getWallets() {
@@ -237,9 +238,7 @@ export async function POST(req: NextRequest) {
 
         await redis.set(earningsKey, JSON.stringify(data));
         
-        // ========== REFERRAL AKTİVİTESİ ==========
         await addActivity('referral', finalReferrer, { amount: REFERRAL_REWARD / LAMPORTS_PER_SOL });
-        
       } catch (e) {
         console.log('Invalid referrer:', e);
       }
@@ -372,7 +371,6 @@ export async function POST(req: NextRequest) {
 
     logCreation(userPublicKey, true, mintKeypair.publicKey.toBase58(), undefined, ip);
     
-    // ========== TOKEN AKTİVİTESİ ==========
     await addActivity('token', userPublicKey, { tokenName: name, tokenSymbol: symbol });
     
     await unlockWallet(userPublicKey);
