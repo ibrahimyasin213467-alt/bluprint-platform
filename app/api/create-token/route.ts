@@ -47,15 +47,12 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ========== RPC URL - DÜZELTİLDİ ==========
+// ========== QUICKNODE RPC (SABİT) ==========
+const QUICKNODE_RPC = 'https://sly-young-violet.solana-mainnet.quiknode.pro/65e48c9aeb45ba600bf8f5476653b0817f2e30b3/';
+
 function getRpcUrl(): string {
-  const url = process.env.NEXT_PUBLIC_RPC_URL || process.env.HELIUS_RPC_URL;
-  if (!url) {
-    console.warn('⚠️ No RPC URL in env, using fallback');
-    return 'https://api.mainnet-beta.solana.com';
-  }
-  console.log('🔌 RPC:', url.substring(0, 50) + '...');
-  return url;
+  console.log('🔌 Using QuickNode RPC');
+  return QUICKNODE_RPC;
 }
 
 function getWallets() {
