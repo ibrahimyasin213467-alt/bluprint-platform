@@ -1,69 +1,35 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-
-interface Token {
-  mint: string;
-  name: string;
-  symbol: string;
-  image: string;
-}
-
 export default function MarqueeBanner() {
-  const [tokens, setTokens] = useState<Token[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchBoostedTokens();
-  }, []);
-
-  const fetchBoostedTokens = async () => {
-    try {
-      const res = await fetch("/api/boosted-tokens");
-      const data = await res.json();
-      if (data.success) {
-        setTokens(data.tokens);
-      } else {
-        // Mock data for demo
-        setTokens([
-          { mint: "1", name: "Bonk", symbol: "BONK", image: "" },
-          { mint: "2", name: "Dogwifhat", symbol: "WIF", image: "" },
-          { mint: "3", name: "Popcat", symbol: "POPCAT", image: "" },
-          { mint: "4", name: "Myro", symbol: "MYRO", image: "" },
-          { mint: "5", name: "Wen", symbol: "WEN", image: "" },
-        ]);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading || tokens.length === 0) return null;
+  const items = [
+    { name: "BONK", change: "+45%", color: "text-green-400" },
+    { name: "WIF", change: "+120%", color: "text-green-400" },
+    { name: "POPCAT", change: "+67%", color: "text-green-400" },
+    { name: "MYRO", change: "+23%", color: "text-green-400" },
+    { name: "BLUEP", change: "+890%", color: "text-green-400" },
+    { name: "BONK", change: "+45%", color: "text-green-400" },
+    { name: "WIF", change: "+120%", color: "text-green-400" },
+    { name: "POPCAT", change: "+67%", color: "text-green-400" },
+    { name: "MYRO", change: "+23%", color: "text-green-400" },
+    { name: "BLUEP", change: "+890%", color: "text-green-400" },
+  ];
 
   return (
-    <div className="relative overflow-hidden py-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-y border-blue-500/30">
-      <motion.div
-        animate={{ x: [0, -1000] }}
-        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        className="flex gap-6 whitespace-nowrap"
-      >
-        {[...tokens, ...tokens].map((token, idx) => (
-          <div key={idx} className="inline-flex items-center gap-2 px-4">
-            <span className="text-yellow-500">🔥</span>
-            <span className="text-white font-medium">{token.symbol}</span>
-            <span className="text-green-500 text-xs">+{Math.floor(Math.random() * 50 + 10)}%</span>
-            <a
-              href={`/token/${token.mint}`}
-              className="text-xs text-blue-400 hover:text-blue-300 underline"
-            >
-              Buy →
-            </a>
-          </div>
-        ))}
-      </motion.div>
+    <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-900/95 to-purple-900/95 backdrop-blur-md border-b border-blue-500/30 py-2">
+      <div className="overflow-hidden whitespace-nowrap">
+        <div className="inline-flex animate-marquee gap-8">
+          {items.map((item, idx) => (
+            <div key={idx} className="inline-flex items-center gap-2 px-2">
+              <span className="text-yellow-400 text-sm">🔥</span>
+              <span className="text-white font-semibold text-sm">{item.name}</span>
+              <span className={`${item.color} text-sm font-mono`}>{item.change}</span>
+              <button className="text-blue-400 hover:text-blue-300 text-xs underline ml-1">
+                Buy →
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
