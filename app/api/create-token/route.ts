@@ -47,9 +47,14 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
+// ========== RPC URL - DÜZELTİLDİ ==========
 function getRpcUrl(): string {
-  const url = process.env.HELIUS_RPC_URL;
-  if (!url) throw new Error('HELIUS_RPC_URL is not configured');
+  const url = process.env.NEXT_PUBLIC_RPC_URL || process.env.HELIUS_RPC_URL;
+  if (!url) {
+    console.warn('⚠️ No RPC URL in env, using fallback');
+    return 'https://api.mainnet-beta.solana.com';
+  }
+  console.log('🔌 RPC:', url.substring(0, 50) + '...');
   return url;
 }
 
@@ -224,7 +229,6 @@ export async function POST(req: NextRequest) {
         data.pending += REFERRAL_REWARD / LAMPORTS_PER_SOL;
         if (!data.referrals.includes(userPublicKey)) data.referrals.push(userPublicKey);
 
-        // Milestone bonus kontrolü
         const refCount = data.referrals.length;
         for (const m of MILESTONES) {
           if (refCount >= m.count && !data.milestones.includes(m.count)) {
