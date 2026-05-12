@@ -31,6 +31,7 @@ import { tryLockWallet, unlockWallet } from '@/app/lib/security/activeWallets';
 import { checkRequestId } from '@/app/lib/security/replayGuard';
 import { checkAbuse, recordCreateAttempt } from '@/app/lib/security/abuseDetection';
 import { validateTokenInput, sanitizeString } from '@/app/lib/security/validateInput';
+import { addActivity } from '@/app/lib/activity';
 
 const MIN_SOL_REQUIRED = 0.15;
 const INITIAL_SUPPLY = 1_000_000_000;
@@ -47,12 +48,11 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ========== ALCHEMY RPC - SON VE KESİN ==========
-const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+// ========== ALCHEMY RPC ==========
+const RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
 
 function getRpcUrl(): string {
-  console.log('🔌 Using Alchemy RPC');
-  return ALCHEMY_RPC;
+  return RPC_URL;
 }
 
 function getWallets() {
@@ -367,6 +367,10 @@ export async function POST(req: NextRequest) {
     }
 
     logCreation(userPublicKey, true, mintKeypair.publicKey.toBase58(), undefined, ip);
+    
+    // ========== AKTİVİTE EKLE ==========
+    await addActivity('token', userPublicKey, { tokenName: name });
+    
     await unlockWallet(userPublicKey);
 
     return NextResponse.json({
