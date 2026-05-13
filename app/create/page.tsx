@@ -176,27 +176,30 @@ function CreatePageContent() {
       transaction.feePayer = publicKey;
 
       // 4. Phantom'a gönder ve imzala (DOĞRUDAN window.solana ile)
-      setStep("📝 Please sign in your wallet...");
-      setProgress(92);
+      // 4. Phantom'a gönder ve imzala (signTransaction + sendRawTransaction)
+setStep("📝 Please sign in your wallet...");
+setProgress(92);
 
-      const provider = window.solana;
-      if (!provider) throw new Error("Phantom wallet not found");
+const provider = window.solana;
+if (!provider) throw new Error("Phantom wallet not found");
 
-      // signAndSendTransaction kullan - tek adımda imzala ve gönder
-      const result = await provider.signAndSendTransaction(transaction);
-      const signature = result.signature;
+// Transaction'ı imzala
+const signedTransaction = await provider.signTransaction(transaction);
 
-      // 5. Onay bekle
-      setStep("⏳ Confirming transaction...");
-      setProgress(96);
-      
-      const confirmation = await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        "confirmed"
-      );
-      
-      if (confirmation.value.err) throw new Error("Transaction failed");
+// İmzalanmış transaction'ı gönder
+setStep("⏳ Sending to blockchain...");
+const signature = await connection.sendRawTransaction(signedTransaction.serialize());
 
+// 5. Onay bekle
+setStep("⏳ Confirming transaction...");
+setProgress(96);
+
+const confirmation = await connection.confirmTransaction(
+  { signature, blockhash, lastValidBlockHeight },
+  "confirmed"
+);
+
+if (confirmation.value.err) throw new Error("Transaction failed");
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
