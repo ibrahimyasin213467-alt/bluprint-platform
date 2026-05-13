@@ -22,7 +22,7 @@ declare global {
 const RPC_URL = "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
 
 function CreatePageContent() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, sendTransaction, connected } = useWallet();
   const { setVisible } = useWalletModal();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -38,6 +38,7 @@ function CreatePageContent() {
   const [mintAddress, setMintAddress] = useState("");
   const [tokensLeft, setTokensLeft] = useState(100);
 
+  // Form state
   const [tokenName, setTokenName] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
   const [tokenSupply, setTokenSupply] = useState(1_000_000_000);
@@ -137,6 +138,7 @@ function CreatePageContent() {
     }, 100);
 
     try {
+      // 1. API'den transaction al
       const res = await fetch("/api/create-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,25 +166,30 @@ function CreatePageContent() {
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
+      // 2. Transaction'ı deserialize et
       const transaction = Transaction.from(Buffer.from(data.transaction, "base64"));
       const connection = new Connection(RPC_URL, "confirmed");
-      const { blockhash } = await connection.getLatestBlockhash();
+
+      // 3. Blockhash al ve ata
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
+      // 4. KULLANICIYA İMZALAT (sendTransaction ile)
       setStep("📝 Please sign in your wallet...");
       setProgress(92);
+      
+      const signature = await sendTransaction(transaction, connection);
 
-      const provider = window.solana;
-      if (!provider) throw new Error("Phantom wallet not found");
-
-      const signed = await provider.signTransaction(transaction);
-      const signature = await connection.sendRawTransaction(signed.serialize());
-
+      // 5. Onay bekle
       setStep("⏳ Confirming transaction...");
       setProgress(96);
-
-      const confirmation = await connection.confirmTransaction(signature, "confirmed");
+      
+      const confirmation = await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed"
+      );
+      
       if (confirmation.value.err) throw new Error("Transaction failed");
 
       clearInterval(progressInterval.current!);
@@ -197,7 +204,7 @@ function CreatePageContent() {
         symbol: tokenSymbol,
         supply: tokenSupply,
         decimals: tokenDecimals,
-        secureToken: data.secureTokenApplied || secureToken,
+        secureToken: secureToken,
         referralApplied: data.referralApplied,
         tokensLeft: data.tokensLeft,
         feePaid: data.feePaid,
@@ -209,6 +216,7 @@ function CreatePageContent() {
       showToast(t("toast_created"), "success");
     } catch (err: any) {
       clearInterval(progressInterval.current!);
+      console.error("Create token error:", err);
       setStatus(`❌ ${err.message}`);
       setProgress(0);
       showToast(`❌ ${err.message}`, "error");
@@ -246,6 +254,7 @@ function CreatePageContent() {
     <PageTransition>
       <div className="relative min-h-screen bg-gray-50 dark:bg-gray-950">
         <div className="pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
+          {/* Banner */}
           {tokensLeft > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -266,13 +275,17 @@ function CreatePageContent() {
 
           {tokensLeft > 0 && <CountdownTimer tokensLeft={tokensLeft} />}
 
+          {/* Başlık */}
           <div className="text-center mb-6 sm:mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{t("create_title")}</h2>
             <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm sm:text-base">{t("create_subtitle")}</p>
           </div>
 
+          {/* Form + Panel */}
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-8">
+            {/* SOL TARAF - FORM */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 sm:p-8 space-y-4 sm:space-y-6">
+              {/* Name + Symbol */}
               <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -300,6 +313,7 @@ function CreatePageContent() {
                 </div>
               </div>
 
+              {/* Supply + Decimals */}
               <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -325,6 +339,7 @@ function CreatePageContent() {
                 </div>
               </div>
 
+              {/* Logo Upload */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t("create_logo_label")}
@@ -352,6 +367,7 @@ function CreatePageContent() {
                 </div>
               </div>
 
+              {/* Description */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t("create_desc_label")}
@@ -365,6 +381,7 @@ function CreatePageContent() {
                 />
               </div>
 
+              {/* Promo Code */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   🎫 {t("common_promo")} <span className="text-gray-400">({t("common_optional")})</span>
@@ -379,7 +396,9 @@ function CreatePageContent() {
               </div>
             </div>
 
+            {/* SAĞ TARAF - LAUNCH PANEL */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 sm:p-8 lg:sticky lg:top-28 space-y-4">
+              {/* Fee Info */}
               <div className="text-center">
                 <div className="text-4xl mb-1">⚡</div>
                 <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{t("create_launch")}</div>
@@ -400,30 +419,49 @@ function CreatePageContent() {
                 </div>
               </div>
 
+              {/* Secure Token (Revokes) */}
               <div className="rounded-xl p-4 sm:p-5 bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-base font-bold text-white">🔒 {t("create_secure_label")}</span>
-                  <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold">⭐ {t("common_free")} ⭐</span>
+                  <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold">
+                    ⭐ {t("common_free")} ⭐
+                  </span>
                 </div>
                 <div className="space-y-2.5">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={revokeMint} onChange={(e) => setRevokeMint(e.target.checked)} className="w-4 h-4 rounded" />
+                    <input
+                      type="checkbox"
+                      checked={revokeMint}
+                      onChange={(e) => setRevokeMint(e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
                     <span className="text-sm text-white/90">🚫 Revoke Mint Authority</span>
                     <span className="text-[10px] text-white/60 hidden sm:inline">(No new tokens)</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={revokeFreeze} onChange={(e) => setRevokeFreeze(e.target.checked)} className="w-4 h-4 rounded" />
+                    <input
+                      type="checkbox"
+                      checked={revokeFreeze}
+                      onChange={(e) => setRevokeFreeze(e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
                     <span className="text-sm text-white/90">❄️ Revoke Freeze Authority</span>
                     <span className="text-[10px] text-white/60 hidden sm:inline">(No account freezes)</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={revokeUpdate} onChange={(e) => setRevokeUpdate(e.target.checked)} className="w-4 h-4 rounded" />
+                    <input
+                      type="checkbox"
+                      checked={revokeUpdate}
+                      onChange={(e) => setRevokeUpdate(e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
                     <span className="text-sm text-white/90">📝 Revoke Update Authority</span>
                     <span className="text-[10px] text-white/60 hidden sm:inline">(Immutable metadata)</span>
                   </label>
                 </div>
               </div>
 
+              {/* Social Links Button */}
               <button
                 onClick={() => setShowSocialLinks(!showSocialLinks)}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2 text-sm"
@@ -467,16 +505,18 @@ function CreatePageContent() {
                 )}
               </AnimatePresence>
 
+              {/* CREATE BUTTON */}
               {mounted && (
                 <button
                   onClick={createToken}
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-lg transition"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-lg transition text-sm sm:text-base"
                 >
                   {loading ? t("create_deploying") : !connected ? t("nav_connect") : t("create_button")}
                 </button>
               )}
 
+              {/* Progress Bar */}
               {isProcessing && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
@@ -493,12 +533,14 @@ function CreatePageContent() {
                 </motion.div>
               )}
 
+              {/* Status Message */}
               {status && (
                 <div className="text-xs sm:text-sm text-center text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
                   {status}
                 </div>
               )}
 
+              {/* Referral Active */}
               {validReferrer && (
                 <div className="text-xs text-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl p-2">
                   🎉 {t("create_referral_active")}
@@ -515,7 +557,11 @@ function CreatePageContent() {
 
 export default function CreatePage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen text-gray-500">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex justify-center items-center min-h-screen text-gray-500">Loading...</div>
+      }
+    >
       <CreatePageContent />
     </Suspense>
   );
