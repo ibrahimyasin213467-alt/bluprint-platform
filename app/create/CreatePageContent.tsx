@@ -343,7 +343,26 @@ export default function CreatePageContent() {
       setStep("⏳ Confirming main transaction...");
       setProgress(95);
       
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      // ========== FIX: confirmTransaction hatasını yönet ==========
+      let confirmed = false;
+      try {
+        await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+        confirmed = true;
+      } catch (confirmError) {
+        console.warn("Confirm error:", confirmError);
+        // Token'ın gerçekten oluşup oluşmadığını kontrol et
+        const statusCheck = await connection.getSignatureStatus(signature);
+        if (statusCheck.value?.confirmationStatus === "confirmed" || statusCheck.value?.confirmationStatus === "finalized") {
+          console.log("Transaction confirmed despite timeout error");
+          confirmed = true;
+        } else {
+          throw confirmError;
+        }
+      }
+      
+      if (!confirmed) {
+        throw new Error("Transaction confirmation failed");
+      }
 
       // Metaplex metadata ve 3. revoke (Update Authority)
       if (metadataUri) {
