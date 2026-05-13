@@ -13,18 +13,6 @@ import {
   createSetAuthorityInstruction,
   AuthorityType,
 } from '@solana/spl-token';
-import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import {
-  mplTokenMetadata,
-  createMetadataAccountV3,
-  updateMetadataAccountV2,
-} from '@metaplex-foundation/mpl-token-metadata';
-import {
-  publicKey as umiPublicKey,
-  keypairIdentity,
-  createSignerFromKeypair,
-} from '@metaplex-foundation/umi';
-import { fromWeb3JsKeypair } from '@metaplex-foundation/umi-web3js-adapters';
 import { redis, KEYS } from '@/app/lib/redis';
 import { checkRateLimit } from '@/app/lib/security/rateLimit';
 import { tryLockWallet, unlockWallet } from '@/app/lib/security/activeWallets';
@@ -48,23 +36,27 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ========== HELIUS RPC ==========
+// ========== RPC (Env'den oku) ==========
 function getRpcUrl(): string {
-  return process.env.HELIUS_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+  const url = process.env.HELIUS_RPC_URL;
+  if (!url) throw new Error('HELIUS_RPC_URL is not configured');
+  return url;
 }
 
+// ========== CÜZDANLAR (Env'den) ==========
 function getWallets() {
   const platform = process.env.PLATFORM_WALLET;
-  const owner    = process.env.OWNER_WALLET;
-  const kuzen    = process.env.KUZEN_WALLET;
+  const owner = process.env.OWNER_WALLET;
+  const kuzen = process.env.KUZEN_WALLET;
   if (!platform || !owner || !kuzen) throw new Error('Wallet env variables not configured');
   return {
     PLATFORM_WALLET: new PublicKey(platform),
-    YOUR_WALLET:     new PublicKey(owner),
-    KUZEN_WALLET:    new PublicKey(kuzen),
+    YOUR_WALLET: new PublicKey(owner),
+    KUZEN_WALLET: new PublicKey(kuzen),
   };
 }
 
+// ========== HELPERS ==========
 function getIp(req: NextRequest): string {
   return (
     req.headers.get('x-vercel-forwarded-for') ||
@@ -101,52 +93,6 @@ async function uploadJSONToIPFS(json: object, pinataJwt: string): Promise<string
   return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
 }
 
-async function createAndRevokeMetadata(
-  mintKeypair: Keypair,
-  name: string,
-  symbol: string,
-  metadataUri: string,
-  secureToken: boolean,
-): Promise<void> {
-  const umi = createUmi(getRpcUrl());
-  const umiKeypair = fromWeb3JsKeypair(mintKeypair);
-  const mintSigner = createSignerFromKeypair(umi, umiKeypair);
-
-  umi.use(keypairIdentity(mintSigner));
-  umi.use(mplTokenMetadata());
-
-  const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
-
-  await createMetadataAccountV3(umi, {
-    mint: mintPublicKey,
-    mintAuthority: mintSigner,
-    updateAuthority: mintSigner,
-    data: {
-      name: sanitizeString(name),
-      symbol: sanitizeString(symbol).toUpperCase(),
-      uri: metadataUri,
-      sellerFeeBasisPoints: 0,
-      creators: null,
-      collection: null,
-      uses: null,
-    },
-    isMutable: !secureToken,
-    collectionDetails: null,
-  }).sendAndConfirm(umi);
-
-  if (secureToken) {
-    await updateMetadataAccountV2(umi, {
-      metadata: mintPublicKey,
-      updateAuthority: mintSigner,
-      newUpdateAuthority: null,
-      data: null,
-      primarySaleHappened: null,
-      isMutable: false,
-    }).sendAndConfirm(umi);
-    console.log('✅ Update Authority revoked');
-  }
-}
-
 export async function POST(req: NextRequest) {
   const ip = getIp(req);
 
@@ -158,6 +104,7 @@ export async function POST(req: NextRequest) {
       twitter, telegram, website, promoCode, requestId,
     } = body;
 
+    // Input validation
     const validation = validateTokenInput({
       name, symbol,
       supply: supply || INITIAL_SUPPLY,
@@ -168,6 +115,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
+    // Security checks
     if (!requestId || !(await checkRequestId(requestId))) {
       return NextResponse.json({ success: false, error: 'Invalid or reused request ID' }, { status: 409 });
     }
@@ -215,9 +163,7 @@ export async function POST(req: NextRequest) {
         const earningsKey = `${KEYS.earnings}:${finalReferrer}`;
         const existing = await redis.get(earningsKey);
         const data: { pending: number; claimed: number; referrals: string[]; milestones: number[] } =
-          existing
-            ? (typeof existing === 'string' ? JSON.parse(existing) : existing)
-            : { pending: 0, claimed: 0, referrals: [], milestones: [] };
+          existing ? (typeof existing === 'string' ? JSON.parse(existing) : existing) : { pending: 0, claimed: 0, referrals: [], milestones: [] };
 
         if (!data.milestones) data.milestones = [];
 
@@ -234,7 +180,6 @@ export async function POST(req: NextRequest) {
         }
 
         await redis.set(earningsKey, JSON.stringify(data));
-        
         await addActivity('referral', finalReferrer, { amount: REFERRAL_REWARD / LAMPORTS_PER_SOL });
       } catch (e) {
         console.log('Invalid referrer:', e);
@@ -254,11 +199,11 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // ========== MINT ==========
+    // ========== MINT ACCOUNT ==========
     const mintKeypair = Keypair.generate();
     const lamports = await getMinimumBalanceForRentExemptMint(connection);
 
-    // ========== IPFS ==========
+    // ========== IPFS METADATA (sadece URI oluştur) ==========
     let metadataUri = '';
     const pinataJwt = process.env.PINATA_JWT;
 
@@ -280,20 +225,20 @@ export async function POST(req: NextRequest) {
           ],
         };
         metadataUri = await uploadJSONToIPFS(metadata, pinataJwt);
-        console.log('✅ IPFS:', metadataUri);
+        console.log('✅ IPFS URI:', metadataUri);
       } catch (e) {
         console.error('IPFS error:', e);
         await unlockWallet(userPublicKey);
-        return NextResponse.json({ success: false, error: 'Failed to upload metadata. Please try again.' }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'Failed to upload metadata to IPFS' }, { status: 500 });
       }
     }
 
-    // ========== TRANSACTION ==========
+    // ========== BUILD TRANSACTION ==========
     const { PLATFORM_WALLET, YOUR_WALLET, KUZEN_WALLET } = getWallets();
 
     const platformShare = Math.floor(feeAmount * 0.10);
-    const yourShare     = Math.floor(feeAmount * 0.58);
-    const kuzenShare    = feeAmount - platformShare - yourShare;
+    const yourShare = Math.floor(feeAmount * 0.58);
+    const kuzenShare = feeAmount - platformShare - yourShare;
 
     const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, userPubkey);
     const supplyBigInt = BigInt(supply || INITIAL_SUPPLY) * BigInt(10) ** BigInt(decimals ?? 9);
@@ -313,14 +258,15 @@ export async function POST(req: NextRequest) {
       }),
       createInitializeMintInstruction(mintKeypair.publicKey, decimals ?? 9, userPubkey, secureToken ? userPubkey : null),
       SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: PLATFORM_WALLET, lamports: platformShare }),
-      SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: YOUR_WALLET,     lamports: yourShare }),
-      SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: KUZEN_WALLET,    lamports: kuzenShare }),
+      SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: YOUR_WALLET, lamports: yourShare }),
+      SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: KUZEN_WALLET, lamports: kuzenShare }),
       createAssociatedTokenAccountInstruction(userPubkey, ata, userPubkey, mintKeypair.publicKey),
       createMintToInstruction(mintKeypair.publicKey, ata, userPubkey, supplyBigInt),
     );
 
     if (referralIx) transaction.add(referralIx);
 
+    // Revoke Mint ve Freeze (1. ve 2. revoke)
     if (secureToken) {
       transaction.add(
         createSetAuthorityInstruction(mintKeypair.publicKey, userPubkey, AuthorityType.MintTokens, null),
@@ -330,13 +276,7 @@ export async function POST(req: NextRequest) {
 
     transaction.partialSign(mintKeypair);
 
-    if (metadataUri && pinataJwt) {
-      createAndRevokeMetadata(mintKeypair, name, symbol, metadataUri, secureToken).catch((e) => {
-        console.error('❌ Metaplex error:', e);
-      });
-    }
-
-    // ========== REDIS ==========
+    // ========== REDIS KAYDI ==========
     try {
       const tokenData = {
         mint: mintKeypair.publicKey.toBase58(),
@@ -348,6 +288,7 @@ export async function POST(req: NextRequest) {
         telegram: sanitizeString(telegram || ''),
         website: sanitizeString(website || ''),
         createdBy: userPublicKey,
+        metadataUri,
       };
 
       await redis.lpush(KEYS.tokens, JSON.stringify(tokenData));
@@ -367,19 +308,17 @@ export async function POST(req: NextRequest) {
     }
 
     logCreation(userPublicKey, true, mintKeypair.publicKey.toBase58(), undefined, ip);
-    
     await addActivity('token', userPublicKey, { tokenName: name, tokenSymbol: symbol });
-    
     await unlockWallet(userPublicKey);
 
     return NextResponse.json({
       success: true,
       transaction: transaction.serialize({ verifySignatures: false, requireAllSignatures: false }).toString('base64'),
       mintAddress: mintKeypair.publicKey.toBase58(),
+      metadataUri,
       referralApplied,
       feePaid: feeAmount / LAMPORTS_PER_SOL,
     });
-
   } catch (error: any) {
     logCreation('unknown', false, undefined, error.message, ip);
     recordCreateAttempt(ip);
