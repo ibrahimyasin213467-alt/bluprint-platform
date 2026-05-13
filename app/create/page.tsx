@@ -22,7 +22,7 @@ declare global {
 const RPC_URL = "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
 
 function CreatePageContent() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const { setVisible } = useWalletModal();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -166,21 +166,17 @@ function CreatePageContent() {
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
-      // Transaction 1'i imzala ve gönder
+      // Transaction 1'i hazırla
       const transaction1 = Transaction.from(Buffer.from(data.transaction, "base64"));
       const connection = new Connection(RPC_URL, "confirmed");
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction1.recentBlockhash = blockhash;
       transaction1.feePayer = publicKey;
 
+      // Transaction 1'i imzala ve gönder
       setStep("📝 Please sign transaction 1/2...");
       setProgress(92);
-
-      const provider = window.solana;
-      if (!provider) throw new Error("Phantom wallet not found");
-
-      const signed1 = await provider.signTransaction(transaction1);
-      const signature1 = await connection.sendRawTransaction(signed1.serialize());
+      const signature1 = await sendTransaction(transaction1, connection);
 
       setStep("⏳ Confirming transaction 1/2...");
       const confirmation1 = await connection.confirmTransaction(
@@ -190,7 +186,6 @@ function CreatePageContent() {
       if (confirmation1.value.err) throw new Error("Transaction 1 failed");
 
       // ========== 2. ADIM: REVOKE (GEREKİYORSA) ==========
-      let revokeSuccess = true;
       if (data.needsRevoke) {
         setStep("🔒 Revoking authorities (2/2)...");
         setProgress(96);
@@ -212,17 +207,14 @@ function CreatePageContent() {
           transaction2.feePayer = publicKey;
 
           setStep("📝 Please sign transaction 2/2...");
-          const signed2 = await provider.signTransaction(transaction2);
-          const signature2 = await connection.sendRawTransaction(signed2.serialize());
+          const signature2 = await sendTransaction(transaction2, connection);
 
           setStep("⏳ Confirming transaction 2/2...");
           const confirmation2 = await connection.confirmTransaction(
             { signature: signature2, blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 },
             "confirmed"
           );
-          if (confirmation2.value.err) revokeSuccess = false;
-        } else {
-          revokeSuccess = false;
+          if (confirmation2.value.err) throw new Error("Revoke transaction failed");
         }
       }
 
