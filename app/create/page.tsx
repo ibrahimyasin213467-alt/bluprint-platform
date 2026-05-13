@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
+
 import { useState, useRef, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
