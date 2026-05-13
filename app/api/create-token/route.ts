@@ -36,14 +36,14 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ========== RPC (Env'den oku) ==========
+// ALCHEMY RPC
+const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+
 function getRpcUrl(): string {
-  const url = process.env.HELIUS_RPC_URL;
-  if (!url) throw new Error('HELIUS_RPC_URL is not configured');
-  return url;
+  console.log('🔌 Using Alchemy RPC');
+  return ALCHEMY_RPC;
 }
 
-// ========== CÜZDANLAR (Env'den) ==========
 function getWallets() {
   const platform = process.env.PLATFORM_WALLET;
   const owner = process.env.OWNER_WALLET;
@@ -56,7 +56,6 @@ function getWallets() {
   };
 }
 
-// ========== HELPERS ==========
 function getIp(req: NextRequest): string {
   return (
     req.headers.get('x-vercel-forwarded-for') ||
@@ -104,7 +103,6 @@ export async function POST(req: NextRequest) {
       twitter, telegram, website, promoCode, requestId,
     } = body;
 
-    // Input validation
     const validation = validateTokenInput({
       name, symbol,
       supply: supply || INITIAL_SUPPLY,
@@ -115,7 +113,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    // Security checks
     if (!requestId || !(await checkRequestId(requestId))) {
       return NextResponse.json({ success: false, error: 'Invalid or reused request ID' }, { status: 409 });
     }
@@ -134,7 +131,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Another request is already processing' }, { status: 409 });
     }
 
-    // ========== REFERRAL ==========
+    // REFERRAL
     let feeAmount = BASE_FEE;
     let referralIx = null;
     let referralApplied = false;
@@ -186,7 +183,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ========== BALANCE CHECK ==========
+    // BALANCE CHECK
     const userPubkey = new PublicKey(userPublicKey);
     const connection = await getConnection();
     const balance = await connection.getBalance(userPubkey);
@@ -199,11 +196,11 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // ========== MINT ACCOUNT ==========
+    // MINT ACCOUNT
     const mintKeypair = Keypair.generate();
     const lamports = await getMinimumBalanceForRentExemptMint(connection);
 
-    // ========== IPFS METADATA (sadece URI oluştur) ==========
+    // IPFS METADATA
     let metadataUri = '';
     const pinataJwt = process.env.PINATA_JWT;
 
@@ -233,7 +230,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ========== BUILD TRANSACTION ==========
+    // BUILD TRANSACTION
     const { PLATFORM_WALLET, YOUR_WALLET, KUZEN_WALLET } = getWallets();
 
     const platformShare = Math.floor(feeAmount * 0.10);
@@ -266,7 +263,6 @@ export async function POST(req: NextRequest) {
 
     if (referralIx) transaction.add(referralIx);
 
-    // Revoke Mint ve Freeze (1. ve 2. revoke)
     if (secureToken) {
       transaction.add(
         createSetAuthorityInstruction(mintKeypair.publicKey, userPubkey, AuthorityType.MintTokens, null),
@@ -276,7 +272,7 @@ export async function POST(req: NextRequest) {
 
     transaction.partialSign(mintKeypair);
 
-    // ========== REDIS KAYDI ==========
+    // REDIS KAYDI
     try {
       const tokenData = {
         mint: mintKeypair.publicKey.toBase58(),
