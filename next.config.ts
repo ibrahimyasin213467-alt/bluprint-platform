@@ -2,6 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  
+  // Prerender'ı devre dışı bırak (dinamik sayfalar için)
+  output: 'standalone',
+  
+  // Dinamik route'ları build'de prerender etme
+  trailingSlash: false,
+  
+  // Build ID'yi sabit tut
+  generateBuildId: async () => 'build',
+  
   async headers() {
     return [
       {
