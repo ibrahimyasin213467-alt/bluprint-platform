@@ -1,16 +1,26 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useSearchParams } from "next/navigation";
-import { Connection, Transaction } from "@solana/web3.js";
+import { Connection, Keypair, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  createInitializeMintInstruction,
+  getMinimumBalanceForRentExemptMint,
+  MINT_SIZE,
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
+  createSetAuthorityInstruction,
+  AuthorityType,
+} from "@solana/spl-token";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
 import SuccessModal from "../components/SuccessModal";
 import { useToast } from "../components/ToastProvider";
-import CountdownTimer from "../components/CountdownTimer";
 import { useI18n } from "../lib/i18n-provider";
 
 declare global {
@@ -19,10 +29,10 @@ declare global {
   }
 }
 
-const RPC_URL = "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
+const RPC_URL = "https://api.mainnet-beta.solana.com";
 
 function CreatePageContent() {
-  const { publicKey, connected, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, connected } = useWallet();
   const { setVisible } = useWalletModal();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -97,15 +107,6 @@ function CreatePageContent() {
     }
   };
 
-  const validateInputs = () => {
-    if (tokenName.length < 3 || tokenName.length > 32) return t("create_name_length_error");
-    if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return t("create_symbol_length_error");
-    if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return t("create_symbol_char_error");
-    if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return t("create_supply_error");
-    if (tokenDecimals < 0 || tokenDecimals > 9) return t("create_decimals_error");
-    return null;
-  };
-
   const createToken = async () => {
     if (isProcessing || loading) return;
     if (!publicKey) {
@@ -113,9 +114,8 @@ function CreatePageContent() {
       return;
     }
 
-    const validationError = validateInputs();
-    if (validationError) {
-      showToast(`❌ ${validationError}`, "error");
+    if (!tokenName || !tokenSymbol) {
+      showToast("Please enter token name and symbol", "error");
       return;
     }
 
@@ -126,120 +126,99 @@ function CreatePageContent() {
     setStatus("Preparing token...");
 
     const start = Date.now();
-    const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
 
     if (progressInterval.current) clearInterval(progressInterval.current);
     progressInterval.current = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 90) return 90;
         const elapsed = (Date.now() - start) / 1000;
-        return Math.min(90, Math.floor((elapsed / 8) * 100));
+        return Math.min(90, Math.floor((elapsed / 10) * 100));
       });
     }, 100);
 
     try {
-      // ========== 1. ADIM: TOKEN OLUŞTUR ==========
-      const res = await fetch("/api/create-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userPublicKey: publicKey.toString(),
-          name: tokenName,
-          symbol: tokenSymbol,
-          supply: tokenSupply,
-          decimals: tokenDecimals,
-          imageUrl: tokenImage,
-          description,
-          secureToken,
-          revokeMint,
-          revokeFreeze,
-          revokeUpdate,
-          referrer: validReferrer,
-          twitter,
-          telegram,
-          website,
-          promoCode: promoCodeInput,
-          requestId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      // Transaction 1'i hazırla
-      const transaction1 = Transaction.from(Buffer.from(data.transaction, "base64"));
       const connection = new Connection(RPC_URL, "confirmed");
+      
+      // 1. Mint keypair oluştur
+      setStep("🔑 Creating mint account...");
+      const mintKeypair = Keypair.generate();
+      const lamports = await getMinimumBalanceForRentExemptMint(connection);
+      
+      // 2. Token hesabı (ATA)
+      setStep("📝 Creating token account...");
+      const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
+      
+      // 3. Supply hesapla
+      const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
+      
+      // 4. Transaction oluştur
+      setStep("📦 Building transaction...");
+      const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction1.recentBlockhash = blockhash;
-      transaction1.feePayer = publicKey;
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
 
-      // Transaction 1'i imzala ve gönder
-      setStep("📝 Please sign transaction 1/2...");
-      setProgress(92);
-      const signature1 = await sendTransaction(transaction1, connection);
-
-      setStep("⏳ Confirming transaction 1/2...");
-      const confirmation1 = await connection.confirmTransaction(
-        { signature: signature1, blockhash, lastValidBlockHeight },
-        "confirmed"
+      // 5. Instruction'ları ekle
+      transaction.add(
+        SystemProgram.createAccount({
+          fromPubkey: publicKey,
+          newAccountPubkey: mintKeypair.publicKey,
+          space: MINT_SIZE,
+          lamports,
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null),
+        createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey),
+        createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
-      if (confirmation1.value.err) throw new Error("Transaction 1 failed");
 
-      // ========== 2. ADIM: REVOKE (GEREKİYORSA) ==========
-      if (data.needsRevoke) {
-        setStep("🔒 Revoking authorities (2/2)...");
-        setProgress(96);
-
-        const revokeRes = await fetch("/api/revoke", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mintAddress: data.mintAddress,
-            userPublicKey: publicKey.toString(),
-          }),
-        });
-
-        const revokeData = await revokeRes.json();
-        if (revokeData.success) {
-          const transaction2 = Transaction.from(Buffer.from(revokeData.transaction, "base64"));
-          const { blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 } = await connection.getLatestBlockhash();
-          transaction2.recentBlockhash = blockhash2;
-          transaction2.feePayer = publicKey;
-
-          setStep("📝 Please sign transaction 2/2...");
-          const signature2 = await sendTransaction(transaction2, connection);
-
-          setStep("⏳ Confirming transaction 2/2...");
-          const confirmation2 = await connection.confirmTransaction(
-            { signature: signature2, blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 },
-            "confirmed"
-          );
-          if (confirmation2.value.err) throw new Error("Revoke transaction failed");
+      // 6. Revoke'lar (secureToken ise)
+      if (secureToken) {
+        if (revokeMint) {
+          transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
+        }
+        if (revokeFreeze) {
+          transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.FreezeAccount, null));
         }
       }
+
+      // 7. Mint keypair'i transaction'a ekle
+      transaction.partialSign(mintKeypair);
+
+      // 8. İmzala ve gönder
+      setStep("📝 Please sign in your wallet...");
+      setProgress(92);
+      const signature = await sendTransaction(transaction, connection);
+      
+      setStep("⏳ Confirming transaction...");
+      setProgress(96);
+      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
 
       setTime((Date.now() - start) / 1000);
-      setMintAddress(data.mintAddress);
+      setMintAddress(mintKeypair.publicKey.toBase58());
       setSuccessData({
-        mint: data.mintAddress,
+        mint: mintKeypair.publicKey.toBase58(),
         name: tokenName,
         symbol: tokenSymbol,
         supply: tokenSupply,
         decimals: tokenDecimals,
         secureToken: secureToken,
-        referralApplied: data.referralApplied,
-        tokensLeft: data.tokensLeft,
-        feePaid: data.feePaid,
+        referralApplied: false,
+        tokensLeft: tokensLeft - 1,
+        feePaid: 0.15,
         twitter,
         telegram,
         website,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
+      
+      // Token sayısını azalt
+      setTokensLeft((prev) => prev - 1);
     } catch (err: any) {
       clearInterval(progressInterval.current!);
       console.error("Create token error:", err);
@@ -298,8 +277,6 @@ function CreatePageContent() {
               </div>
             </motion.div>
           )}
-
-          {tokensLeft > 0 && <CountdownTimer tokensLeft={tokensLeft} />}
 
           {/* Başlık */}
           <div className="text-center mb-6 sm:mb-10">
@@ -406,20 +383,6 @@ function CreatePageContent() {
                   className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none resize-none"
                 />
               </div>
-
-              {/* Promo Code */}
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  🎫 {t("common_promo")} <span className="text-gray-400">({t("common_optional")})</span>
-                </label>
-                <input
-                  type="text"
-                  value={promoCodeInput}
-                  onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-                  placeholder={t("create_promo_placeholder")}
-                  className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none uppercase"
-                />
-              </div>
             </div>
 
             {/* SAĞ TARAF - LAUNCH PANEL */}
@@ -473,16 +436,6 @@ function CreatePageContent() {
                     />
                     <span className="text-sm text-white/90">❄️ Revoke Freeze Authority</span>
                     <span className="text-[10px] text-white/60 hidden sm:inline">(No account freezes)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={revokeUpdate}
-                      onChange={(e) => setRevokeUpdate(e.target.checked)}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className="text-sm text-white/90">📝 Revoke Update Authority</span>
-                    <span className="text-[10px] text-white/60 hidden sm:inline">(Immutable metadata)</span>
                   </label>
                 </div>
               </div>
@@ -583,12 +536,6 @@ function CreatePageContent() {
 
 export default function CreatePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center items-center min-h-screen text-gray-500">Loading...</div>
-      }
-    >
-      <CreatePageContent />
-    </Suspense>
+    <CreatePageContent />
   );
 }
