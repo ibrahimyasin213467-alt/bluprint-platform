@@ -138,7 +138,7 @@ function CreatePageContent() {
     }, 100);
 
     try {
-      // 1. API'den transaction al
+      // ========== 1. ADIM: TOKEN OLUŞTUR ==========
       const res = await fetch("/api/create-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,40 +166,66 @@ function CreatePageContent() {
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
-      // 2. Transaction'ı deserialize et
-      const transaction = Transaction.from(Buffer.from(data.transaction, "base64"));
+      // Transaction 1'i imzala ve gönder
+      const transaction1 = Transaction.from(Buffer.from(data.transaction, "base64"));
       const connection = new Connection(RPC_URL, "confirmed");
-
-      // 3. Blockhash al ve ata
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
+      transaction1.recentBlockhash = blockhash;
+      transaction1.feePayer = publicKey;
 
-      // 4. Phantom'a gönder ve imzala (DOĞRUDAN window.solana ile)
-      // 4. Phantom'a gönder ve imzala (signTransaction + sendRawTransaction)
-setStep("📝 Please sign in your wallet...");
-setProgress(92);
+      setStep("📝 Please sign transaction 1/2...");
+      setProgress(92);
 
-const provider = window.solana;
-if (!provider) throw new Error("Phantom wallet not found");
+      const provider = window.solana;
+      if (!provider) throw new Error("Phantom wallet not found");
 
-// Transaction'ı imzala
-const signedTransaction = await provider.signTransaction(transaction);
+      const signed1 = await provider.signTransaction(transaction1);
+      const signature1 = await connection.sendRawTransaction(signed1.serialize());
 
-// İmzalanmış transaction'ı gönder
-setStep("⏳ Sending to blockchain...");
-const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+      setStep("⏳ Confirming transaction 1/2...");
+      const confirmation1 = await connection.confirmTransaction(
+        { signature: signature1, blockhash, lastValidBlockHeight },
+        "confirmed"
+      );
+      if (confirmation1.value.err) throw new Error("Transaction 1 failed");
 
-// 5. Onay bekle
-setStep("⏳ Confirming transaction...");
-setProgress(96);
+      // ========== 2. ADIM: REVOKE (GEREKİYORSA) ==========
+      let revokeSuccess = true;
+      if (data.needsRevoke) {
+        setStep("🔒 Revoking authorities (2/2)...");
+        setProgress(96);
 
-const confirmation = await connection.confirmTransaction(
-  { signature, blockhash, lastValidBlockHeight },
-  "confirmed"
-);
+        const revokeRes = await fetch("/api/revoke", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mintAddress: data.mintAddress,
+            userPublicKey: publicKey.toString(),
+          }),
+        });
 
-if (confirmation.value.err) throw new Error("Transaction failed");
+        const revokeData = await revokeRes.json();
+        if (revokeData.success) {
+          const transaction2 = Transaction.from(Buffer.from(revokeData.transaction, "base64"));
+          const { blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 } = await connection.getLatestBlockhash();
+          transaction2.recentBlockhash = blockhash2;
+          transaction2.feePayer = publicKey;
+
+          setStep("📝 Please sign transaction 2/2...");
+          const signed2 = await provider.signTransaction(transaction2);
+          const signature2 = await connection.sendRawTransaction(signed2.serialize());
+
+          setStep("⏳ Confirming transaction 2/2...");
+          const confirmation2 = await connection.confirmTransaction(
+            { signature: signature2, blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 },
+            "confirmed"
+          );
+          if (confirmation2.value.err) revokeSuccess = false;
+        } else {
+          revokeSuccess = false;
+        }
+      }
+
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");

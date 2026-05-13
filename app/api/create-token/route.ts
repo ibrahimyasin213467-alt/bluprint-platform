@@ -10,8 +10,6 @@ import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
-  createSetAuthorityInstruction,
-  AuthorityType,
 } from '@solana/spl-token';
 import { redis, KEYS } from '@/app/lib/redis';
 import { checkRateLimit } from '@/app/lib/security/rateLimit';
@@ -36,12 +34,11 @@ const MILESTONES = [
   { count: 100, bonus: 1.0 },
 ];
 
-// ALCHEMY RPC
-const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
+// RPC
+const RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo';
 
 function getRpcUrl(): string {
-  console.log('🔌 Using Alchemy RPC');
-  return ALCHEMY_RPC;
+  return RPC_URL;
 }
 
 function getWallets() {
@@ -230,7 +227,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // BUILD TRANSACTION
+    // BUILD TRANSACTION (SADECE TOKEN + FEE + REFERRAL - REVOKE YOK)
     const { PLATFORM_WALLET, YOUR_WALLET, KUZEN_WALLET } = getWallets();
 
     const platformShare = Math.floor(feeAmount * 0.10);
@@ -253,7 +250,7 @@ export async function POST(req: NextRequest) {
         lamports,
         programId: TOKEN_PROGRAM_ID,
       }),
-      createInitializeMintInstruction(mintKeypair.publicKey, decimals ?? 9, userPubkey, secureToken ? userPubkey : null),
+      createInitializeMintInstruction(mintKeypair.publicKey, decimals ?? 9, userPubkey, userPubkey), // Authority user'da
       SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: PLATFORM_WALLET, lamports: platformShare }),
       SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: YOUR_WALLET, lamports: yourShare }),
       SystemProgram.transfer({ fromPubkey: userPubkey, toPubkey: KUZEN_WALLET, lamports: kuzenShare }),
@@ -262,13 +259,6 @@ export async function POST(req: NextRequest) {
     );
 
     if (referralIx) transaction.add(referralIx);
-
-    if (secureToken) {
-      transaction.add(
-        createSetAuthorityInstruction(mintKeypair.publicKey, userPubkey, AuthorityType.MintTokens, null),
-        createSetAuthorityInstruction(mintKeypair.publicKey, userPubkey, AuthorityType.FreezeAccount, null),
-      );
-    }
 
     transaction.partialSign(mintKeypair);
 
@@ -314,6 +304,7 @@ export async function POST(req: NextRequest) {
       metadataUri,
       referralApplied,
       feePaid: feeAmount / LAMPORTS_PER_SOL,
+      needsRevoke: secureToken, // Revoke gerekiyorsa true
     });
   } catch (error: any) {
     logCreation('unknown', false, undefined, error.message, ip);
