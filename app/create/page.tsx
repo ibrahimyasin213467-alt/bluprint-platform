@@ -22,7 +22,7 @@ declare global {
 const RPC_URL = "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
 
 function CreatePageContent() {
-  const { publicKey, sendTransaction, connected } = useWallet();
+  const { publicKey, connected } = useWallet();
   const { setVisible } = useWalletModal();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -175,11 +175,16 @@ function CreatePageContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // 4. KULLANICIYA İMZALAT (sendTransaction ile)
+      // 4. Phantom'a gönder ve imzala (DOĞRUDAN window.solana ile)
       setStep("📝 Please sign in your wallet...");
       setProgress(92);
-      
-      const signature = await sendTransaction(transaction, connection);
+
+      const provider = window.solana;
+      if (!provider) throw new Error("Phantom wallet not found");
+
+      // signAndSendTransaction kullan - tek adımda imzala ve gönder
+      const result = await provider.signAndSendTransaction(transaction);
+      const signature = result.signature;
 
       // 5. Onay bekle
       setStep("⏳ Confirming transaction...");
@@ -217,9 +222,9 @@ function CreatePageContent() {
     } catch (err: any) {
       clearInterval(progressInterval.current!);
       console.error("Create token error:", err);
-      setStatus(`❌ ${err.message}`);
+      setStatus(`❌ ${err.message || "Unknown error"}`);
       setProgress(0);
-      showToast(`❌ ${err.message}`, "error");
+      showToast(`❌ ${err.message || "Unknown error"}`, "error");
     } finally {
       setLoading(false);
       setIsProcessing(false);
