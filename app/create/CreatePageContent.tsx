@@ -169,7 +169,6 @@ export default function CreatePageContent() {
 
       const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
 
-      // Create metadata account
       const tx = await createMetadataAccountV3(umi, {
         mint: mintPublicKey,
         mintAuthority: mintSigner,
@@ -200,7 +199,6 @@ export default function CreatePageContent() {
       
       await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
-      // 3. REVOKE: Update Authority'yi revoke et
       if (revokeUpdate) {
         const updateTx = await updateMetadataAccountV2(umi, {
           metadata: mintPublicKey,
@@ -261,36 +259,29 @@ export default function CreatePageContent() {
     try {
       const connection = new Connection(RPC_URL, "confirmed");
       
-      // Fee hesaplama
       const feeAmount = validReferrer ? REFERRAL_FEE : BASE_FEE;
       const platformShare = Math.floor(feeAmount * 0.10);
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      // IPFS metadata yükle
       setStep("📤 Uploading metadata to IPFS...");
       const metadataUri = await uploadMetadataToIPFS();
       
-      // Mint keypair oluştur
       setStep("🔑 Creating mint account...");
       const mintKeypair = Keypair.generate();
       const lamports = await getMinimumBalanceForRentExemptMint(connection);
       
-      // ATA oluştur
       setStep("📝 Creating token account...");
       const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
       
-      // Supply hesapla
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
-      // Ana Transaction oluştur
       setStep("📦 Building transaction...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // Instruction'ları ekle
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -299,12 +290,7 @@ export default function CreatePageContent() {
           lamports,
           programId: TOKEN_PROGRAM_ID,
         }),
-        createInitializeMintInstruction(
-          mintKeypair.publicKey, 
-          tokenDecimals, 
-          publicKey, 
-          secureToken ? publicKey : null
-        ),
+        createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare }),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(OWNER_WALLET), lamports: yourShare }),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare }),
@@ -312,14 +298,12 @@ export default function CreatePageContent() {
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // Referral transfer
       if (validReferrer) {
         transaction.add(
           SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(validReferrer), lamports: REFERRAL_REWARD })
         );
       }
 
-      // 1. ve 2. Revoke: Mint Authority ve Freeze Authority
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -331,7 +315,6 @@ export default function CreatePageContent() {
 
       transaction.partialSign(mintKeypair);
 
-      // Ana transaction'ı imzala ve gönder
       setStep("📝 Please sign the main transaction...");
       setProgress(92);
       
@@ -343,14 +326,12 @@ export default function CreatePageContent() {
       setStep("⏳ Confirming main transaction...");
       setProgress(95);
       
-      // ========== FIX: confirmTransaction hatasını yönet ==========
       let confirmed = false;
       try {
         await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
         confirmed = true;
       } catch (confirmError) {
         console.warn("Confirm error:", confirmError);
-        // Token'ın gerçekten oluşup oluşmadığını kontrol et
         const statusCheck = await connection.getSignatureStatus(signature);
         if (statusCheck.value?.confirmationStatus === "confirmed" || statusCheck.value?.confirmationStatus === "finalized") {
           console.log("Transaction confirmed despite timeout error");
@@ -364,7 +345,6 @@ export default function CreatePageContent() {
         throw new Error("Transaction confirmation failed");
       }
 
-      // Metaplex metadata ve 3. revoke (Update Authority)
       if (metadataUri) {
         setStep("🎨 Creating metadata...");
         setProgress(98);
@@ -445,14 +425,12 @@ export default function CreatePageContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-        {/* Premium Arkaplan Efektleri */}
         <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:50px_50px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
         <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-b from-blue-600/20 to-transparent blur-3xl" />
         <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-tl from-purple-600/20 to-transparent blur-3xl" />
         
         <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
-          {/* Banner */}
           {tokensLeft > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
@@ -472,7 +450,6 @@ export default function CreatePageContent() {
             </motion.div>
           )}
 
-          {/* Başlık */}
           <div className="text-center mb-6 sm:mb-10">
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
@@ -491,7 +468,6 @@ export default function CreatePageContent() {
             </motion.p>
           </div>
 
-          {/* Form + Panel */}
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-8">
             {/* SOL TARAF - FORM */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 space-y-4 sm:space-y-6">
@@ -548,6 +524,45 @@ export default function CreatePageContent() {
                   </div>
                   {validReferrer && <div className="text-xs text-green-400 mt-1 animate-pulse">🎉 Referral active! You saved 0.05 SOL</div>}
                 </div>
+              </div>
+
+              {/* REFERRAL PANEL */}
+              <div className="rounded-xl p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">💰</span>
+                  <span className="font-bold text-green-400 text-sm">REFERRAL PROGRAM</span>
+                </div>
+                <p className="text-xs text-gray-300 mb-2">
+                  Share your referral link and earn <span className="text-green-400 font-bold">0.05 SOL</span> for every friend who creates a token!
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' && publicKey ? `${window.location.origin}/create?ref=${publicKey}` : "Connect wallet to get your link"}
+                    placeholder="Connect wallet to get your link"
+                    className="flex-1 px-3 py-2 text-xs bg-gray-800/50 border border-gray-700 rounded-lg text-gray-300 outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (publicKey) {
+                        const link = `${window.location.origin}/create?ref=${publicKey}`;
+                        navigator.clipboard.writeText(link);
+                        showToast("Referral link copied!", "success");
+                      }
+                    }}
+                    disabled={!publicKey}
+                    className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition"
+                  >
+                    Copy
+                  </button>
+                </div>
+                {!publicKey && <p className="text-xs text-yellow-500 mt-2">⚠️ Connect wallet to get your referral link</p>}
+                {publicKey && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    🔗 Your link: <span className="text-green-400">bluprint.fun/create?ref={publicKey.toString().slice(0, 8)}...</span>
+                  </p>
+                )}
               </div>
 
               {/* Secure Token - 3 Revoke */}
