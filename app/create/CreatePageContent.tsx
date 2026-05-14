@@ -53,8 +53,9 @@ export default function CreatePageContent() {
   const [time, setTime] = useState(0);
   const [mintAddress, setMintAddress] = useState("");
   const [tokensLeft, setTokensLeft] = useState(100);
-  const [promoCode, setPromoCode] = useState("");
+  const [myPromoCode, setMyPromoCode] = useState("");
   const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [referrerWallet, setReferrerWallet] = useState<string | null>(null);
 
   // Form state
   const [tokenName, setTokenName] = useState("");
@@ -74,9 +75,10 @@ export default function CreatePageContent() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
-  const referrerAddress = searchParams.get("ref");
-  const validReferrer = referrerAddress && referrerAddress.length === 44 ? referrerAddress : null;
   const secureToken = revokeMint || revokeFreeze || revokeUpdate;
+
+  // URL'den ref parametresini al (link ile gelen)
+  const urlReferrer = searchParams.get("ref");
 
   useEffect(() => setMounted(true), []);
 
@@ -89,26 +91,49 @@ export default function CreatePageContent() {
       .catch(() => {});
   }, []);
 
+  // Kendi promo code'umu al
   useEffect(() => {
-    if (validReferrer) showToast(t("toast_referral"), "info");
-  }, [validReferrer]);
-
-  useEffect(() => {
-    const fetchPromoCode = async () => {
+    const fetchMyPromoCode = async () => {
       if (publicKey) {
         try {
           const res = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
           const data = await res.json();
           if (data.success && data.promoCode) {
-            setPromoCode(data.promoCode);
+            setMyPromoCode(data.promoCode);
           }
         } catch (err) {
           console.error("Failed to fetch promo code:", err);
         }
       }
     };
-    fetchPromoCode();
+    fetchMyPromoCode();
   }, [publicKey]);
+
+  // Promo code girilince referrer wallet'ı bul
+  useEffect(() => {
+    const fetchReferrerByPromoCode = async () => {
+      if (promoCodeInput && promoCodeInput.length === 7) {
+        try {
+          const res = await fetch(`/api/promo?code=${promoCodeInput}`);
+          const data = await res.json();
+          if (data.success && data.wallet) {
+            setReferrerWallet(data.wallet);
+            showToast(`🎉 Promo code applied! You will save 0.05 SOL`, "success");
+          } else {
+            setReferrerWallet(null);
+            if (promoCodeInput) {
+              showToast("Invalid promo code", "error");
+            }
+          }
+        } catch (err) {
+          setReferrerWallet(null);
+        }
+      } else {
+        setReferrerWallet(null);
+      }
+    };
+    fetchReferrerByPromoCode();
+  }, [promoCodeInput]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -278,10 +303,28 @@ export default function CreatePageContent() {
     try {
       const connection = new Connection(RPC_URL, "confirmed");
       
-      const feeAmount = validReferrer ? REFERRAL_FEE : BASE_FEE;
+      // ========== PROMO CODE / REFERRAL SİSTEMİ ==========
+      // Öncelik: 1. URL'den gelen ref, 2. Promo code input
+      let finalReferrer: string | null = null;
+      
+      // URL'den ref kontrolü
+      if (urlReferrer && urlReferrer.length === 44 && urlReferrer !== publicKey.toString()) {
+        finalReferrer = urlReferrer;
+      }
+      
+      // Promo code ile referrer bul (öncelikli değil, ama promo code varsa onu kullan)
+      if (!finalReferrer && referrerWallet && referrerWallet !== publicKey.toString()) {
+        finalReferrer = referrerWallet;
+      }
+      
+      const hasReferral = !!finalReferrer;
+      const feeAmount = hasReferral ? REFERRAL_FEE : BASE_FEE;
+      
       const platformShare = Math.floor(feeAmount * 0.10);
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
+      
+      console.log("Referral active:", hasReferral, "Referrer:", finalReferrer, "Fee:", feeAmount / LAMPORTS_PER_SOL, "SOL");
       
       setStep("📤 Uploading metadata to IPFS...");
       const metadataUri = await uploadMetadataToIPFS();
@@ -301,6 +344,7 @@ export default function CreatePageContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
+      // Ana instruction'lar
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -317,12 +361,19 @@ export default function CreatePageContent() {
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      if (validReferrer) {
+      // REFERRAL TRANSFER: 0.05 SOL referrer'a gider (blockchain üzerinden)
+      if (hasReferral && finalReferrer) {
         transaction.add(
-          SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(validReferrer), lamports: REFERRAL_REWARD })
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: new PublicKey(finalReferrer),
+            lamports: REFERRAL_REWARD,
+          })
         );
+        console.log("✅ Referral transfer added:", REFERRAL_REWARD / LAMPORTS_PER_SOL, "SOL to", finalReferrer);
       }
 
+      // Revoke'lar
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -364,6 +415,7 @@ export default function CreatePageContent() {
         throw new Error("Transaction confirmation failed");
       }
 
+      // Metadata (opsiyonel)
       if (metadataUri) {
         setStep("🎨 Creating metadata...");
         setProgress(98);
@@ -386,7 +438,8 @@ export default function CreatePageContent() {
         revokeMint,
         revokeFreeze,
         revokeUpdate,
-        referralApplied: !!validReferrer,
+        referralApplied: hasReferral,
+        referrer: finalReferrer,
         tokensLeft: tokensLeft - 1,
         feePaid: feeAmount / LAMPORTS_PER_SOL,
         twitter,
@@ -397,11 +450,11 @@ export default function CreatePageContent() {
       showToast(t("toast_created"), "success");
       setTokensLeft((prev) => prev - 1);
       
-      // Promo code'u yeniden al
+      // Promo code'u yeniden al (token oluşturduğu için artık kodu olmalı)
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
-        setPromoCode(promoData.promoCode);
+        setMyPromoCode(promoData.promoCode);
       }
     } catch (err: any) {
       clearInterval(progressInterval.current!);
@@ -443,6 +496,7 @@ export default function CreatePageContent() {
           setWebsite("");
           setShowSocialLinks(false);
           setPromoCodeInput("");
+          setReferrerWallet(null);
         }}
         onHome={() => setSuccessData(null)}
       />
@@ -536,7 +590,7 @@ export default function CreatePageContent() {
               {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
-                  🎫 Promo Code <span className="text-gray-500">(optional)</span>
+                  🎫 Promo Code <span className="text-gray-500">(optional - get 0.05 SOL discount!)</span>
                 </label>
                 <input
                   type="text"
@@ -545,7 +599,12 @@ export default function CreatePageContent() {
                   placeholder="Enter promo code (e.g., ABC1234)"
                   className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white focus:ring-2 focus:ring-blue-500 outline-none uppercase"
                 />
-                {!promoCodeInput && publicKey && !promoCode && (
+                {referrerWallet && (
+                  <p className="text-xs text-green-400 mt-1">
+                    ✅ Valid promo code! You will pay only 0.10 SOL
+                  </p>
+                )}
+                {!promoCodeInput && publicKey && !myPromoCode && (
                   <p className="text-xs text-gray-500 mt-1">
                     💡 Create a token to get your own promo code
                   </p>
@@ -561,14 +620,24 @@ export default function CreatePageContent() {
                 {tokensLeft > 0 && <div className="inline-flex items-center gap-1 mt-2 bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-medium border border-amber-500/30">🎁 {t("create_first100")}</div>}
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-400">{t("create_launch_fee")}</span>
-                    <span className="font-bold text-green-400">{validReferrer || promoCodeInput ? "0.10 SOL" : "0.15 SOL"}</span>
+                    <span className="text-gray-400">Creation Fee</span>
+                    <span className="font-bold text-green-400">{referrerWallet ? "0.10 SOL" : "0.15 SOL"}</span>
                   </div>
+                  {referrerWallet && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">You save:</span>
+                      <span className="text-green-400">0.05 SOL</span>
+                    </div>
+                  )}
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
-                    <span className="text-gray-300">{t("create_total_fee")}</span>
-                    <span className="text-green-400 font-bold text-lg">{validReferrer || promoCodeInput ? "0.10 SOL" : "0.15 SOL"}</span>
+                    <span className="text-gray-300">Total to pay:</span>
+                    <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.10 SOL" : "0.15 SOL"}</span>
                   </div>
-                  {(validReferrer || promoCodeInput) && <div className="text-xs text-green-400 mt-1 animate-pulse">🎉 Promo code applied! You saved 0.05 SOL</div>}
+                  {referrerWallet && (
+                    <div className="text-xs text-green-400 mt-1 animate-pulse">
+                      🎉 Promo code applied! 0.05 SOL will go to the referrer
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -588,24 +657,24 @@ export default function CreatePageContent() {
                     <p className="text-xs text-gray-400 mb-1">Your Promo Code:</p>
                     <div className="flex gap-2">
                       <code className="flex-1 px-3 py-2 text-sm font-mono bg-gray-900 rounded-lg text-green-400 border border-gray-700">
-                        {promoCode || "Create a token first"}
+                        {myPromoCode || "Create a token first"}
                       </code>
                       <button
                         onClick={() => {
-                          if (promoCode) {
-                            navigator.clipboard.writeText(promoCode);
+                          if (myPromoCode) {
+                            navigator.clipboard.writeText(myPromoCode);
                             showToast("Promo code copied!", "success");
                           }
                         }}
-                        disabled={!promoCode}
+                        disabled={!myPromoCode}
                         className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition"
                       >
                         Copy
                       </button>
                     </div>
-                    {promoCode && (
+                    {myPromoCode && (
                       <p className="text-xs text-gray-500 mt-2">
-                        🔗 Share code: <span className="text-green-400">{promoCode}</span>
+                        🔗 Share this code with friends: <span className="text-green-400">{myPromoCode}</span>
                       </p>
                     )}
                   </div>
@@ -710,12 +779,6 @@ export default function CreatePageContent() {
               {status && (
                 <div className="text-xs sm:text-sm text-center text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3">
                   {status}
-                </div>
-              )}
-
-              {(validReferrer || promoCodeInput) && (
-                <div className="text-xs text-center text-green-400 bg-green-500/10 border border-green-500/30 rounded-xl p-2">
-                  🎉 Promo code applied! You saved 0.05 SOL
                 </div>
               )}
             </div>
