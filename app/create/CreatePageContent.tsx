@@ -209,7 +209,7 @@ export default function CreatePageContent() {
     
     try {
       // Public RPC kullan (Alchemy Metaplex'i desteklemiyor)
-      const umi = createUmi(PUBLIC_RPC);
+      const umi = createUmi(RPC_URL);
       const umiKeypair = fromWeb3JsKeypair(mintKeypair);
       const mintSigner = createSignerFromKeypair(umi, umiKeypair);
       umi.use(keypairIdentity(mintSigner));
