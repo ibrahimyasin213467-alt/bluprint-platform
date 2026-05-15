@@ -35,7 +35,7 @@ const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
 const REFERRAL_REWARD = 0.05 * LAMPORTS_PER_SOL;
 const BASE_FEE = 0.15 * LAMPORTS_PER_SOL;
 const REFERRAL_FEE = 0.10 * LAMPORTS_PER_SOL;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 1;
 
 export default function CreatePageContent() {
   const { publicKey, sendTransaction, connected } = useWallet();
@@ -237,7 +237,7 @@ export default function CreatePageContent() {
       transaction.feePayer = publicKey!;
 
       const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: false,
+        skipPreflight: true,
         maxRetries: MAX_RETRIES,
       });
       
@@ -260,7 +260,7 @@ export default function CreatePageContent() {
         updateTransaction.feePayer = publicKey!;
 
         const signature2 = await sendTransaction(updateTransaction, connection, {
-          skipPreflight: false,
+          skipPreflight: true,
           maxRetries: MAX_RETRIES,
         });
         
@@ -304,15 +304,12 @@ export default function CreatePageContent() {
       const connection = new Connection(RPC_URL, "confirmed");
       
       // ========== PROMO CODE / REFERRAL SİSTEMİ ==========
-      // Öncelik: 1. URL'den gelen ref, 2. Promo code input
       let finalReferrer: string | null = null;
       
-      // URL'den ref kontrolü
       if (urlReferrer && urlReferrer.length === 44 && urlReferrer !== publicKey.toString()) {
         finalReferrer = urlReferrer;
       }
       
-      // Promo code ile referrer bul (öncelikli değil, ama promo code varsa onu kullan)
       if (!finalReferrer && referrerWallet && referrerWallet !== publicKey.toString()) {
         finalReferrer = referrerWallet;
       }
@@ -344,7 +341,6 @@ export default function CreatePageContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // Ana instruction'lar
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -361,7 +357,6 @@ export default function CreatePageContent() {
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // REFERRAL TRANSFER: 0.05 SOL referrer'a gider (blockchain üzerinden)
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -373,7 +368,6 @@ export default function CreatePageContent() {
         console.log("✅ Referral transfer added:", REFERRAL_REWARD / LAMPORTS_PER_SOL, "SOL to", finalReferrer);
       }
 
-      // Revoke'lar
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -385,43 +379,33 @@ export default function CreatePageContent() {
 
       transaction.partialSign(mintKeypair);
 
+      // ========== MANUEL SİMÜLASYON (Kullanıcıya göstermeden) ==========
+      setStep("🔍 Validating transaction...");
+      try {
+        const simulateTx = Transaction.from(transaction.serialize());
+        const simulation = await connection.simulateTransaction(simulateTx);
+        if (simulation.value.err) {
+          throw new Error(`Transaction would fail: ${JSON.stringify(simulation.value.err)}`);
+        }
+      } catch (simError: any) {
+        throw new Error(`Transaction validation failed: ${simError.message}`);
+      }
+
+      // ========== GERÇEK TRANSACTION (skipPreflight ile) ==========
       setStep("📝 Please sign the main transaction...");
       setProgress(92);
       
       const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: false,
+        skipPreflight: true,
         maxRetries: MAX_RETRIES,
       });
       
-      setStep("⏳ Confirming main transaction...");
+      setStep("⏳ Confirming...");
       setProgress(95);
       
-      let confirmed = false;
-      try {
-        await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-        confirmed = true;
-      } catch (confirmError) {
-        console.warn("Confirm error:", confirmError);
-        const statusCheck = await connection.getSignatureStatus(signature);
-        if (statusCheck.value?.confirmationStatus === "confirmed" || statusCheck.value?.confirmationStatus === "finalized") {
-          console.log("Transaction confirmed despite timeout error");
-          confirmed = true;
-        } else {
-          throw confirmError;
-        }
-      }
-      
-      if (!confirmed) {
-        throw new Error("Transaction confirmation failed");
-      }
+      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
-      // Metadata (opsiyonel)
-      if (metadataUri) {
-        setStep("🎨 Creating metadata...");
-        setProgress(98);
-        await createMetadata(mintKeypair, metadataUri, connection);
-      }
-
+      // ========== SUCCESS EKRANI HEMEN GÖSTER ==========
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
@@ -449,8 +433,16 @@ export default function CreatePageContent() {
       setStatus("");
       showToast(t("toast_created"), "success");
       setTokensLeft((prev) => prev - 1);
-      
-      // Promo code'u yeniden al (token oluşturduğu için artık kodu olmalı)
+
+      // ========== ARKA PLANDA METADATA EKLE ==========
+      if (metadataUri) {
+        createMetadata(mintKeypair, metadataUri, connection).catch(err => {
+          console.error("Background metadata failed:", err);
+          showToast("⚠️ Token created but metadata could not be added. You can add it later.", "warning");
+        });
+      }
+
+      // Promo code'u yeniden al
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
