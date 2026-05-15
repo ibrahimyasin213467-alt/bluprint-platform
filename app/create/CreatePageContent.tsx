@@ -26,7 +26,6 @@ import PageTransition from "../components/PageTransition";
 import SuccessModal from "../components/SuccessModal";
 import { useToast } from "../components/ToastProvider";
 import { useI18n } from "../lib/i18n-provider";
-import { checkRateLimit } from "../lib/rate-limit";
 
 // ==================== KONFIGÜRASYON ====================
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
@@ -302,18 +301,7 @@ export default function CreatePageContent() {
       return;
     }
 
-    // ========== RATE LIMITING (Redis - saatte 3 token) ==========
-    try {
-      const rateLimit = await checkRateLimit(`create:${publicKey.toString()}`, 3, 3600);
-      if (!rateLimit.success) {
-        const waitMinutes = Math.ceil((rateLimit.reset - Date.now() / 1000) / 60);
-        showToast(`You can only create 3 tokens per hour. Try again in ${waitMinutes} minutes.`, "error");
-        return;
-      }
-    } catch (err) {
-      console.error("Rate limit error:", err);
-      // Rate limit hatasında devam et (fail open)
-    }
+
 
     // ========== LOCALSTORAGE YEDEK RATE LIMIT (1 dakika) ==========
     const lastCreate = localStorage.getItem('bluprint_last_create');
