@@ -379,18 +379,6 @@ export default function CreatePageContent() {
 
       transaction.partialSign(mintKeypair);
 
-      // ========== MANUEL SİMÜLASYON (Kullanıcıya göstermeden) ==========
-      setStep("🔍 Validating transaction...");
-      try {
-        const simulateTx = Transaction.from(transaction.serialize());
-        const simulation = await connection.simulateTransaction(simulateTx);
-        if (simulation.value.err) {
-          throw new Error(`Transaction would fail: ${JSON.stringify(simulation.value.err)}`);
-        }
-      } catch (simError: any) {
-        throw new Error(`Transaction validation failed: ${simError.message}`);
-      }
-
       // ========== GERÇEK TRANSACTION (skipPreflight ile) ==========
       setStep("📝 Please sign the main transaction...");
       setProgress(92);
