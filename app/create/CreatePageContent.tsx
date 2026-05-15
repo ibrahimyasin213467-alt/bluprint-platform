@@ -199,7 +199,7 @@ export default function CreatePageContent() {
     }
   };
 
- const createMetadata = async (
+const createMetadata = async (
   mintKeypair: Keypair,
   metadataUri: string,
   connection: Connection
@@ -207,18 +207,22 @@ export default function CreatePageContent() {
   if (!metadataUri) return;
   
   try {
+    // UMI'yi kullanıcının cüzdanı ile yapılandır
     const umi = createUmi(RPC_URL);
-    const umiKeypair = fromWeb3JsKeypair(mintKeypair);
-    const mintSigner = createSignerFromKeypair(umi, umiKeypair);
-    umi.use(keypairIdentity(mintSigner));
+    
+    // Kullanıcının cüzdanını UMI'ye signer olarak ekle
+    const umiUserKeypair = fromWeb3JsKeypair(Keypair.fromSecretKey(publicKey!.toBuffer()));
+    const userSigner = createSignerFromKeypair(umi, umiUserKeypair);
+    umi.use(keypairIdentity(userSigner));
     umi.use(mplTokenMetadata());
 
     const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
 
+    // Metadata account oluştur - kullanıcı imzalayacak
     const tx = await createMetadataAccountV3(umi, {
       mint: mintPublicKey,
-      mintAuthority: mintSigner,
-      updateAuthority: mintSigner,
+      mintAuthority: userSigner,  // Kullanıcının cüzdanı
+      updateAuthority: userSigner, // Kullanıcının cüzdanı
       data: {
         name: tokenName,
         symbol: tokenSymbol.toUpperCase(),
@@ -232,15 +236,15 @@ export default function CreatePageContent() {
       collectionDetails: null,
     }).buildAndSign(umi);
 
-    // UMI ile direkt gönder (format sorunu yok)
+    // UMI ile direkt gönder
     const signature = await umi.rpc.sendTransaction(tx);
     console.log("✅ Metadata created with signature:", signature);
     
-    // 3. REVOKE için aynı şekilde
+    // 3. REVOKE: Update Authority'yi revoke et
     if (revokeUpdate) {
       const updateTx = await updateMetadataAccountV2(umi, {
         metadata: mintPublicKey,
-        updateAuthority: mintSigner,
+        updateAuthority: userSigner,
         newUpdateAuthority: null,
         data: null,
         primarySaleHappened: null,
@@ -255,6 +259,7 @@ export default function CreatePageContent() {
     throw err;
   }
 };
+
 
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
