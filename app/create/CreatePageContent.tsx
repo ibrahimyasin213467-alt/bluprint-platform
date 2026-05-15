@@ -199,84 +199,62 @@ export default function CreatePageContent() {
     }
   };
 
-  const createMetadata = async (
-    mintKeypair: Keypair,
-    metadataUri: string,
-    connection: Connection
-  ): Promise<void> => {
-    if (!metadataUri) return;
+ const createMetadata = async (
+  mintKeypair: Keypair,
+  metadataUri: string,
+  connection: Connection
+): Promise<void> => {
+  if (!metadataUri) return;
+  
+  try {
+    const umi = createUmi(RPC_URL);
+    const umiKeypair = fromWeb3JsKeypair(mintKeypair);
+    const mintSigner = createSignerFromKeypair(umi, umiKeypair);
+    umi.use(keypairIdentity(mintSigner));
+    umi.use(mplTokenMetadata());
+
+    const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
+
+    const tx = await createMetadataAccountV3(umi, {
+      mint: mintPublicKey,
+      mintAuthority: mintSigner,
+      updateAuthority: mintSigner,
+      data: {
+        name: tokenName,
+        symbol: tokenSymbol.toUpperCase(),
+        uri: metadataUri,
+        sellerFeeBasisPoints: 0,
+        creators: null,
+        collection: null,
+        uses: null,
+      },
+      isMutable: !revokeUpdate,
+      collectionDetails: null,
+    }).buildAndSign(umi);
+
+    // UMI ile direkt gönder (format sorunu yok)
+    const signature = await umi.rpc.sendTransaction(tx);
+    console.log("✅ Metadata created with signature:", signature);
     
-    try {
-      // Helius RPC kullan
-      const umi = createUmi(RPC_URL);
-      const umiKeypair = fromWeb3JsKeypair(mintKeypair);
-      const mintSigner = createSignerFromKeypair(umi, umiKeypair);
-      umi.use(keypairIdentity(mintSigner));
-      umi.use(mplTokenMetadata());
-
-      const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
-
-      const tx = await createMetadataAccountV3(umi, {
-        mint: mintPublicKey,
-        mintAuthority: mintSigner,
+    // 3. REVOKE için aynı şekilde
+    if (revokeUpdate) {
+      const updateTx = await updateMetadataAccountV2(umi, {
+        metadata: mintPublicKey,
         updateAuthority: mintSigner,
-        data: {
-          name: tokenName,
-          symbol: tokenSymbol.toUpperCase(),
-          uri: metadataUri,
-          sellerFeeBasisPoints: 0,
-          creators: null,
-          collection: null,
-          uses: null,
-        },
-        isMutable: !revokeUpdate,
-        collectionDetails: null,
+        newUpdateAuthority: null,
+        data: null,
+        primarySaleHappened: null,
+        isMutable: false,
       }).buildAndSign(umi);
-
-      const txBytes = umi.transactions.serialize(tx);
-      const transaction = Transaction.from(Buffer.from(txBytes));
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey!;
-
-      const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: true,
-        maxRetries: MAX_RETRIES,
-      });
       
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-      console.log("✅ Metadata account created");
-
-      // 3. REVOKE: Update Authority
-      if (revokeUpdate) {
-        const updateTx = await updateMetadataAccountV2(umi, {
-          metadata: mintPublicKey,
-          updateAuthority: mintSigner,
-          newUpdateAuthority: null,
-          data: null,
-          primarySaleHappened: null,
-          isMutable: false,
-        }).buildAndSign(umi);
-
-        const updateTxBytes = umi.transactions.serialize(updateTx);
-        const updateTransaction = Transaction.from(Buffer.from(updateTxBytes));
-        const { blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 } = await connection.getLatestBlockhash();
-        updateTransaction.recentBlockhash = blockhash2;
-        updateTransaction.feePayer = publicKey!;
-
-        const signature2 = await sendTransaction(updateTransaction, connection, {
-          skipPreflight: true,
-          maxRetries: MAX_RETRIES,
-        });
-        
-        await connection.confirmTransaction({ signature: signature2, blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 }, "confirmed");
-        console.log("✅ Update authority revoked");
-      }
-    } catch (err) {
-      console.error("Metadata creation error:", err);
-      throw err;
+      const signature2 = await umi.rpc.sendTransaction(updateTx);
+      console.log("✅ Update authority revoked with signature:", signature2);
     }
-  };
+  } catch (err) {
+    console.error("Metadata creation error:", err);
+    throw err;
+  }
+};
 
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
