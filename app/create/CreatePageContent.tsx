@@ -232,22 +232,18 @@ const createMetadata = async (
       collectionDetails: null,
     }).buildAndSign(umi);
 
-    const txBytes = umi.transactions.serialize(tx);
-    const transaction = Transaction.from(Buffer.from(txBytes));
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = publicKey!;
+    // ========== BURASI DEĞİŞTİ ==========
+    // ESKİ (karışık):
+    // const txBytes = umi.transactions.serialize(tx);
+    // const transaction = Transaction.from(Buffer.from(txBytes));
+    // const signed = await provider.signTransaction(transaction);
+    // const signature = await connection.sendRawTransaction(signed.serialize());
     
-    // ========== KULLANICI İMZALASIN ==========
-    const provider = (window as any).solana;
-    if (!provider) throw new Error("Phantom wallet not found");
+    // YENİ (basit):
+    const signature = await umi.rpc.sendTransaction(tx);
+    console.log("✅ Metadata created with signature:", signature);
     
-    const signed = await provider.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
-    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-    
-    console.log("✅ Metadata created");
-    
+    // 3. REVOKE için de aynı
     if (revokeUpdate) {
       const updateTx = await updateMetadataAccountV2(umi, {
         metadata: mintPublicKey,
@@ -258,22 +254,14 @@ const createMetadata = async (
         isMutable: false,
       }).buildAndSign(umi);
       
-      const updateTxBytes = umi.transactions.serialize(updateTx);
-      const updateTransaction = Transaction.from(Buffer.from(updateTxBytes));
-      updateTransaction.recentBlockhash = blockhash;
-      updateTransaction.feePayer = publicKey!;
-      
-      const signed2 = await provider.signTransaction(updateTransaction);
-      const signature2 = await connection.sendRawTransaction(signed2.serialize());
-      await connection.confirmTransaction({ signature: signature2, blockhash, lastValidBlockHeight }, "confirmed");
-      console.log("✅ Update authority revoked");
+      const signature2 = await umi.rpc.sendTransaction(updateTx);
+      console.log("✅ Update authority revoked with signature:", signature2);
     }
   } catch (err) {
     console.error("Metadata creation error:", err);
     throw err;
   }
 };
-
 
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
