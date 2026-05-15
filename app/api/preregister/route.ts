@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+  import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/app/lib/redis';
-import { addActivity } from '@/app/lib/activity';
 
 const MAX_LIMIT = 2000;
+const VIP_LIMIT = 500;
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,52 +13,77 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Wallet required' }, { status: 400 });
     }
 
+    // Zaten kayıtlı mı?
     const existing = await redis.get(`preregister:${wallet}`);
     if (existing) {
       return NextResponse.json({ success: false, error: 'Already registered' }, { status: 400 });
     }
 
+    // Kontenjan dolu mu?
     const count = await redis.scard('preregister:list');
     if (count >= MAX_LIMIT) {
       return NextResponse.json({ success: false, error: 'Registration full' }, { status: 400 });
     }
 
-    const isVip = count < 500;
+    // VIP mi Premium mu?
+    const isVip = count < VIP_LIMIT;
     const tier = isVip ? 'vip' : 'premium';
 
     const data = {
       wallet,
       tier,
       registeredAt: new Date().toISOString(),
-      referrals: 0,
+      hasCreatedToken: false,
+      createdAt: new Date().toISOString(),
     };
     
+    // Redis'e kaydet
     await redis.set(`preregister:${wallet}`, JSON.stringify(data));
     await redis.sadd('preregister:list', wallet);
-    if (isVip) {
-      await redis.sadd('preregister:vip', wallet);
-    } else {
-      await redis.sadd('preregister:premium', wallet);
-    }
-
-    await addActivity(isVip ? 'vip' : 'premium', wallet, { rank: count + 1 });
+    await redis.sadd(`preregister:${tier}`, wallet);
+    
+    // Sayaçları güncelle
+    await redis.incr(`stats:${tier}:count`);
+    await redis.incr('stats:total:count');
 
     return NextResponse.json({
       success: true,
       tier,
       rank: count + 1,
       total: MAX_LIMIT,
+      vipLimit: VIP_LIMIT,
     });
   } catch (error: any) {
+    console.error('Preregister error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
 export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const wallet = searchParams.get('wallet');
+
+    if (wallet) {
+      // Tekil kullanıcı sorgusu
+      const data = await redis.get(`preregister:${wallet}`);
+      if (!data) {
+        return NextResponse.json({ success: false, registered: false });
+      }
+      const userData = JSON.parse(data as string);
+      return NextResponse.json({
+        success: true,
+        registered: true,
+        tier: userData.tier,
+        hasCreatedToken: userData.hasCreatedToken || false,
+      });
+    }
+
+    // İstatistikler
     const total = await redis.scard('preregister:list');
     const vip = await redis.scard('preregister:vip');
     const premium = total - vip;
+    const launchReady = total >= MAX_LIMIT;
 
     return NextResponse.json({
       success: true,
@@ -66,11 +91,12 @@ export async function GET(req: NextRequest) {
         total,
         vip,
         premium,
-        maxLimit: 2000,
-        vipLimit: 500,
+        maxLimit: MAX_LIMIT,
+        vipLimit: VIP_LIMIT,
+        launchReady,
       },
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
-} 
+}
