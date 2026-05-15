@@ -208,14 +208,22 @@ const createMetadata = async (
   
   try {
     const umi = createUmi(RPC_URL);
+    
+    // ========== KRİTİK: Kullanıcının cüzdanını fee payer olarak kullan ==========
+    // mintKeypair'i sadece mint authority olarak kullan, fee payer olarak DEĞİL
     const umiKeypair = fromWeb3JsKeypair(mintKeypair);
     const mintSigner = createSignerFromKeypair(umi, umiKeypair);
-    umi.use(keypairIdentity(mintSigner));
+    
+    // Kullanıcının cüzdanını fee payer olarak ekle
+    // Bunun için wallet adapter'dan signer alman lazım
+    // Geçici çözüm: window.solana ile imzala
+    
     umi.use(mplTokenMetadata());
 
     const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
 
-    const tx = await createMetadataAccountV3(umi, {
+    // Transaction'ı oluştur (imzalamadan)
+    const tx = createMetadataAccountV3(umi, {
       mint: mintPublicKey,
       mintAuthority: mintSigner,
       updateAuthority: mintSigner,
@@ -230,32 +238,45 @@ const createMetadata = async (
       },
       isMutable: !revokeUpdate,
       collectionDetails: null,
-    }).buildAndSign(umi);
-
-    // ========== BURASI DEĞİŞTİ ==========
-    // ESKİ (karışık):
-    // const txBytes = umi.transactions.serialize(tx);
-    // const transaction = Transaction.from(Buffer.from(txBytes));
-    // const signed = await provider.signTransaction(transaction);
-    // const signature = await connection.sendRawTransaction(signed.serialize());
+    });
     
-    // YENİ (basit):
-    const signature = await umi.rpc.sendTransaction(tx);
-    console.log("✅ Metadata created with signature:", signature);
+    // Serialize et
+    const txBytes = umi.transactions.serialize(await tx.buildAndSign(umi));
+    const transaction = Transaction.from(Buffer.from(txBytes));
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = publicKey!;  // Kullanıcı fee ödesin
     
-    // 3. REVOKE için de aynı
+    // Kullanıcı imzalasın
+    const provider = (window as any).solana;
+    if (!provider) throw new Error("Phantom not found");
+    
+    const signed = await provider.signTransaction(transaction);
+    const signature = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+    
+    console.log("✅ Metadata created");
+    
+    // 3. REVOKE için aynı işlem
     if (revokeUpdate) {
-      const updateTx = await updateMetadataAccountV2(umi, {
+      const updateTx = updateMetadataAccountV2(umi, {
         metadata: mintPublicKey,
         updateAuthority: mintSigner,
         newUpdateAuthority: null,
         data: null,
         primarySaleHappened: null,
         isMutable: false,
-      }).buildAndSign(umi);
+      });
       
-      const signature2 = await umi.rpc.sendTransaction(updateTx);
-      console.log("✅ Update authority revoked with signature:", signature2);
+      const updateTxBytes = umi.transactions.serialize(await updateTx.buildAndSign(umi));
+      const updateTransaction = Transaction.from(Buffer.from(updateTxBytes));
+      updateTransaction.recentBlockhash = blockhash;
+      updateTransaction.feePayer = publicKey!;
+      
+      const signed2 = await provider.signTransaction(updateTransaction);
+      const signature2 = await connection.sendRawTransaction(signed2.serialize());
+      await connection.confirmTransaction({ signature: signature2, blockhash, lastValidBlockHeight }, "confirmed");
+      console.log("✅ Update authority revoked");
     }
   } catch (err) {
     console.error("Metadata creation error:", err);
