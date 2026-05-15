@@ -26,15 +26,17 @@ import PageTransition from "../components/PageTransition";
 import SuccessModal from "../components/SuccessModal";
 import { useToast } from "../components/ToastProvider";
 import { useI18n } from "../lib/i18n-provider";
+import { checkRateLimit } from "../lib/rate-limit";
 
 // ==================== KONFIGÜRASYON ====================
-const RPC_URL = "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
+const PUBLIC_RPC = "https://api.mainnet-beta.solana.com";
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
 const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
 const REFERRAL_REWARD = 0.05 * LAMPORTS_PER_SOL;
-const BASE_FEE = 0.15 * LAMPORTS_PER_SOL;
-const REFERRAL_FEE = 0.10 * LAMPORTS_PER_SOL;
+const BASE_FEE = 0.13 * LAMPORTS_PER_SOL;      // Geçici 0.13 SOL
+const REFERRAL_FEE = 0.08 * LAMPORTS_PER_SOL; // Referral ile 0.08 SOL
 const MAX_RETRIES = 1;
 
 export default function CreatePageContent() {
@@ -156,7 +158,10 @@ export default function CreatePageContent() {
 
   const uploadMetadataToIPFS = async (): Promise<string | null> => {
     const pinataJwt = process.env.NEXT_PUBLIC_PINATA_JWT;
-    if (!pinataJwt) return null;
+    if (!pinataJwt) {
+      console.warn("No Pinata JWT found");
+      return null;
+    }
     
     const metadata = {
       name: tokenName,
@@ -188,6 +193,7 @@ export default function CreatePageContent() {
       });
       const data = await res.json();
       if (!data.IpfsHash) throw new Error("IPFS upload failed");
+      console.log("✅ IPFS URI:", data.IpfsHash);
       return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
     } catch (err) {
       console.error("IPFS upload error:", err);
@@ -203,7 +209,8 @@ export default function CreatePageContent() {
     if (!metadataUri) return;
     
     try {
-      const umi = createUmi(RPC_URL);
+      // Public RPC kullan (Alchemy Metaplex'i desteklemiyor)
+      const umi = createUmi(PUBLIC_RPC);
       const umiKeypair = fromWeb3JsKeypair(mintKeypair);
       const mintSigner = createSignerFromKeypair(umi, umiKeypair);
       umi.use(keypairIdentity(mintSigner));
@@ -240,8 +247,9 @@ export default function CreatePageContent() {
       });
       
       await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      console.log("✅ Metadata account created");
 
-      // 3. REVOKE: Update Authority'yi revoke et
+      // 3. REVOKE: Update Authority
       if (revokeUpdate) {
         const updateTx = await updateMetadataAccountV2(umi, {
           metadata: mintPublicKey,
@@ -264,6 +272,7 @@ export default function CreatePageContent() {
         });
         
         await connection.confirmTransaction({ signature: signature2, blockhash: blockhash2, lastValidBlockHeight: lastValidBlockHeight2 }, "confirmed");
+        console.log("✅ Update authority revoked");
       }
     } catch (err) {
       console.error("Metadata creation error:", err);
@@ -293,6 +302,27 @@ export default function CreatePageContent() {
       return;
     }
 
+    // ========== RATE LIMITING (Redis - saatte 3 token) ==========
+    try {
+      const rateLimit = await checkRateLimit(`create:${publicKey.toString()}`, 3, 3600);
+      if (!rateLimit.success) {
+        const waitMinutes = Math.ceil((rateLimit.reset - Date.now() / 1000) / 60);
+        showToast(`You can only create 3 tokens per hour. Try again in ${waitMinutes} minutes.`, "error");
+        return;
+      }
+    } catch (err) {
+      console.error("Rate limit error:", err);
+      // Rate limit hatasında devam et (fail open)
+    }
+
+    // ========== LOCALSTORAGE YEDEK RATE LIMIT (1 dakika) ==========
+    const lastCreate = localStorage.getItem('bluprint_last_create');
+    if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
+      const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
+      showToast(`Please wait ${remaining} seconds before creating another token`, "error");
+      return;
+    }
+
     setIsProcessing(true);
     setLoading(true);
     setProgress(0);
@@ -306,7 +336,7 @@ export default function CreatePageContent() {
       setProgress((prev) => {
         if (prev >= 90) return 90;
         const elapsed = (Date.now() - start) / 1000;
-        return Math.min(90, Math.floor((elapsed / 12) * 100));
+        return Math.min(90, Math.floor((elapsed / 10) * 100));
       });
     }, 100);
 
@@ -328,7 +358,8 @@ export default function CreatePageContent() {
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      setStep("📤 Uploading metadata to IPFS...");
+      // IPFS Metadata yükle
+      setStep("📤 Uploading metadata...");
       const metadataUri = await uploadMetadataToIPFS();
       
       // Mint keypair
@@ -377,7 +408,7 @@ export default function CreatePageContent() {
         );
       }
 
-      // Revoke'lar (1 ve 2)
+      // 1. ve 2. Revoke
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -398,25 +429,21 @@ export default function CreatePageContent() {
         maxRetries: MAX_RETRIES,
       });
       
-      setStep("⏳ Confirming...");
+      // confirmTransaction kaldırıldı - sadece 2 saniye bekle
+      setStep("⏳ Finalizing...");
       setProgress(95);
-      
-      // WebSocket hatasını görmezden gel
-      try {
-        await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-      } catch (confirmError) {
-        console.warn("Confirm error (ignored):", confirmError);
-      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // ========== SUCCESS EKRANI HEMEN GÖSTER ==========
+      // ========== SUCCESS EKRANI ==========
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
 
       setTime((Date.now() - start) / 1000);
-      setMintAddress(mintKeypair.publicKey.toBase58());
+      const newMintAddress = mintKeypair.publicKey.toBase58();
+      setMintAddress(newMintAddress);
       setSuccessData({
-        mint: mintKeypair.publicKey.toBase58(),
+        mint: newMintAddress,
         name: tokenName,
         symbol: tokenSymbol,
         supply: tokenSupply,
@@ -438,14 +465,39 @@ export default function CreatePageContent() {
       showToast(t("toast_created"), "success");
       setTokensLeft((prev) => prev - 1);
       
-      // Promo code'u yeniden al
+      // ========== REDIS'E TOKEN KAYDET ==========
+      try {
+        await fetch("/api/tokens", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mint: newMintAddress,
+            name: tokenName,
+            symbol: tokenSymbol,
+            createdBy: publicKey.toString(),
+            createdAt: new Date().toISOString(),
+            image: tokenImage,
+            twitter,
+            telegram,
+            website,
+          }),
+        });
+        console.log("✅ Token saved to Redis");
+      } catch (err) {
+        console.error("Failed to save token to Redis:", err);
+      }
+      
+      // ========== LOCALSTORAGE RATE LIMIT KAYDET ==========
+      localStorage.setItem('bluprint_last_create', Date.now().toString());
+      
+      // ========== PROMO CODE'U YENİDEN AL ==========
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
         setMyPromoCode(promoData.promoCode);
       }
 
-      // ========== ARKA PLANDA METADATA EKLE (KULLANICI BEKLEMEDEN) ==========
+      // ========== ARKA PLANDA METADATA EKLE (Public RPC ile) ==========
       if (metadataUri) {
         (async () => {
           try {
@@ -482,7 +534,7 @@ export default function CreatePageContent() {
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       } else if (err.message?.includes("insufficient")) {
-        errorMessage = "Insufficient SOL balance. Need at least 0.15 SOL.";
+        errorMessage = "Insufficient SOL balance. Need at least 0.13 SOL.";
       }
       
       setStatus(`❌ ${errorMessage}`);
@@ -541,7 +593,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.15 SOL</span>
+                <span className="font-bold">0.13 SOL</span>
               </div>
             </motion.div>
           )}
@@ -615,7 +667,7 @@ export default function CreatePageContent() {
                 />
                 {referrerWallet && (
                   <p className="text-xs text-green-400 mt-1">
-                    ✅ Valid promo code! You will pay only 0.10 SOL
+                    ✅ Valid promo code! You will pay only 0.08 SOL
                   </p>
                 )}
               </div>
@@ -630,7 +682,7 @@ export default function CreatePageContent() {
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Creation Fee</span>
-                    <span className="font-bold text-green-400">{referrerWallet ? "0.10 SOL" : "0.15 SOL"}</span>
+                    <span className="font-bold text-green-400">{referrerWallet ? "0.08 SOL" : "0.13 SOL"}</span>
                   </div>
                   {referrerWallet && (
                     <div className="flex justify-between text-xs">
@@ -640,7 +692,7 @@ export default function CreatePageContent() {
                   )}
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
                     <span className="text-gray-300">Total to pay:</span>
-                    <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.10 SOL" : "0.15 SOL"}</span>
+                    <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.08 SOL" : "0.13 SOL"}</span>
                   </div>
                 </div>
               </div>
