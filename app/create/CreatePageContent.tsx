@@ -28,14 +28,13 @@ import { useToast } from "../components/ToastProvider";
 import { useI18n } from "../lib/i18n-provider";
 
 // ==================== KONFIGÜRASYON ====================
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
-const PUBLIC_RPC = "https://api.mainnet-beta.solana.com";
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=fdbb8762-06b5-4bbd-ab1e-33310587e2d4";
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
 const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
-const REFERRAL_REWARD = 0.05 * LAMPORTS_PER_SOL;
-const BASE_FEE = 0.13 * LAMPORTS_PER_SOL;      // Geçici 0.13 SOL
-const REFERRAL_FEE = 0.08 * LAMPORTS_PER_SOL; // Referral ile 0.08 SOL
+const REFERRAL_REWARD = 0.025 * LAMPORTS_PER_SOL;  // Referral ödülü 0.025 SOL
+const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;          // 0.05 SOL
+const REFERRAL_FEE = 0.025 * LAMPORTS_PER_SOL;     // Referral ile 0.025 SOL
 const MAX_RETRIES = 1;
 
 export default function CreatePageContent() {
@@ -117,7 +116,7 @@ export default function CreatePageContent() {
           const data = await res.json();
           if (data.success && data.wallet) {
             setReferrerWallet(data.wallet);
-            showToast(`🎉 Promo code applied! You will save 0.05 SOL`, "success");
+            showToast(`🎉 Promo code applied! You will save 0.025 SOL`, "success");
           } else {
             setReferrerWallet(null);
             if (promoCodeInput) {
@@ -208,7 +207,7 @@ export default function CreatePageContent() {
     if (!metadataUri) return;
     
     try {
-      // Public RPC kullan (Alchemy Metaplex'i desteklemiyor)
+      // Helius RPC kullan
       const umi = createUmi(RPC_URL);
       const umiKeypair = fromWeb3JsKeypair(mintKeypair);
       const mintSigner = createSignerFromKeypair(umi, umiKeypair);
@@ -301,9 +300,7 @@ export default function CreatePageContent() {
       return;
     }
 
-
-
-    // ========== LOCALSTORAGE YEDEK RATE LIMIT (1 dakika) ==========
+    // ========== LOCALSTORAGE RATE LIMIT (1 dakika) ==========
     const lastCreate = localStorage.getItem('bluprint_last_create');
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
       const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
@@ -485,7 +482,7 @@ export default function CreatePageContent() {
         setMyPromoCode(promoData.promoCode);
       }
 
-      // ========== ARKA PLANDA METADATA EKLE (Public RPC ile) ==========
+      // ========== ARKA PLANDA METADATA EKLE ==========
       if (metadataUri) {
         (async () => {
           try {
@@ -522,7 +519,7 @@ export default function CreatePageContent() {
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       } else if (err.message?.includes("insufficient")) {
-        errorMessage = "Insufficient SOL balance. Need at least 0.13 SOL.";
+        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
       }
       
       setStatus(`❌ ${errorMessage}`);
@@ -581,7 +578,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.13 SOL</span>
+                <span className="font-bold">0.05 SOL</span>
               </div>
             </motion.div>
           )}
@@ -644,7 +641,7 @@ export default function CreatePageContent() {
               {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
-                  🎫 Promo Code <span className="text-gray-500">(optional - get 0.05 SOL discount!)</span>
+                  🎫 Promo Code <span className="text-gray-500">(optional - get 0.025 SOL discount!)</span>
                 </label>
                 <input
                   type="text"
@@ -655,7 +652,7 @@ export default function CreatePageContent() {
                 />
                 {referrerWallet && (
                   <p className="text-xs text-green-400 mt-1">
-                    ✅ Valid promo code! You will pay only 0.08 SOL
+                    ✅ Valid promo code! You will pay only 0.025 SOL
                   </p>
                 )}
               </div>
@@ -670,17 +667,17 @@ export default function CreatePageContent() {
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Creation Fee</span>
-                    <span className="font-bold text-green-400">{referrerWallet ? "0.08 SOL" : "0.13 SOL"}</span>
+                    <span className="font-bold text-green-400">{referrerWallet ? "0.025 SOL" : "0.05 SOL"}</span>
                   </div>
                   {referrerWallet && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">You save:</span>
-                      <span className="text-green-400">0.05 SOL</span>
+                      <span className="text-green-400">0.025 SOL</span>
                     </div>
                   )}
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
                     <span className="text-gray-300">Total to pay:</span>
-                    <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.08 SOL" : "0.13 SOL"}</span>
+                    <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.025 SOL" : "0.05 SOL"}</span>
                   </div>
                 </div>
               </div>
@@ -692,7 +689,7 @@ export default function CreatePageContent() {
                   <span className="font-bold text-green-400 text-sm">REFERRAL PROGRAM</span>
                 </div>
                 <p className="text-xs text-gray-300 mb-2">
-                  Share your promo code and earn <span className="text-green-400 font-bold">0.05 SOL</span> for every friend who creates a token!
+                  Share your promo code and earn <span className="text-green-400 font-bold">0.025 SOL</span> for every friend who creates a token!
                 </p>
                 
                 {publicKey && (
