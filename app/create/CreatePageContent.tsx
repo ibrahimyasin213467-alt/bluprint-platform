@@ -17,8 +17,8 @@ import {
   AuthorityType,
 } from "@solana/spl-token";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
-import { mplTokenMetadata, createMetadataAccountV3, updateMetadataAccountV2 } from "@metaplex-foundation/mpl-token-metadata";
-import { publicKey as umiPublicKey, keypairIdentity, createSignerFromKeypair } from "@metaplex-foundation/umi";
+import { mplTokenMetadata, createMetadataAccountV3 } from "@metaplex-foundation/mpl-token-metadata";
+import { publicKey as umiPublicKey } from "@metaplex-foundation/umi";
 import { fromWeb3JsKeypair } from "@metaplex-foundation/umi-web3js-adapters";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
@@ -32,10 +32,20 @@ const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.c
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
 const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
-const REFERRAL_REWARD = 0.025 * LAMPORTS_PER_SOL;  // Referral ödülü 0.025 SOL
-const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;          // 0.05 SOL
-const REFERRAL_FEE = 0.025 * LAMPORTS_PER_SOL;     // Referral ile 0.025 SOL
+const REFERRAL_REWARD = 0.025 * LAMPORTS_PER_SOL;
+const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;
+const REFERRAL_FEE = 0.025 * LAMPORTS_PER_SOL;
 const MAX_RETRIES = 1;
+
+// Metadata PDA hesaplama
+function findMetadataPda(mint: PublicKey): PublicKey {
+  const seeds = [
+    Buffer.from("metadata"),
+    new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+    mint.toBuffer(),
+  ];
+  return PublicKey.findProgramAddressSync(seeds, new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"))[0];
+}
 
 export default function CreatePageContent() {
   const { publicKey, sendTransaction, connected } = useWallet();
@@ -89,7 +99,6 @@ export default function CreatePageContent() {
       .catch(() => {});
   }, []);
 
-  // Kendi promo code'umu al
   useEffect(() => {
     const fetchMyPromoCode = async () => {
       if (publicKey) {
@@ -107,7 +116,6 @@ export default function CreatePageContent() {
     fetchMyPromoCode();
   }, [publicKey]);
 
-  // Promo code girilince referrer wallet'ı bul
   useEffect(() => {
     const fetchReferrerByPromoCode = async () => {
       if (promoCodeInput && promoCodeInput.length === 7) {
@@ -171,9 +179,6 @@ export default function CreatePageContent() {
         { trait_type: "Platform", value: "BluPrint" },
         { trait_type: "Type", value: "Meme Coin" },
         { trait_type: "Secure Token", value: secureToken ? "Yes (3 Revokes)" : "No" },
-        { trait_type: "Mint Revoked", value: revokeMint ? "Yes" : "No" },
-        { trait_type: "Freeze Revoked", value: revokeFreeze ? "Yes" : "No" },
-        { trait_type: "Update Revoked", value: revokeUpdate ? "Yes" : "No" },
       ],
     };
     
@@ -199,91 +204,6 @@ export default function CreatePageContent() {
     }
   };
 
-const createMetadata = async (
-  mintKeypair: Keypair,
-  metadataUri: string,
-  connection: Connection
-): Promise<void> => {
-  if (!metadataUri) return;
-  
-  try {
-    const umi = createUmi(RPC_URL);
-    
-    // ========== KRİTİK: Kullanıcının cüzdanını fee payer olarak kullan ==========
-    // mintKeypair'i sadece mint authority olarak kullan, fee payer olarak DEĞİL
-    const umiKeypair = fromWeb3JsKeypair(mintKeypair);
-    const mintSigner = createSignerFromKeypair(umi, umiKeypair);
-    
-    // Kullanıcının cüzdanını fee payer olarak ekle
-    // Bunun için wallet adapter'dan signer alman lazım
-    // Geçici çözüm: window.solana ile imzala
-    
-    umi.use(mplTokenMetadata());
-
-    const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
-
-    // Transaction'ı oluştur (imzalamadan)
-    const tx = createMetadataAccountV3(umi, {
-      mint: mintPublicKey,
-      mintAuthority: mintSigner,
-      updateAuthority: mintSigner,
-      data: {
-        name: tokenName,
-        symbol: tokenSymbol.toUpperCase(),
-        uri: metadataUri,
-        sellerFeeBasisPoints: 0,
-        creators: null,
-        collection: null,
-        uses: null,
-      },
-      isMutable: !revokeUpdate,
-      collectionDetails: null,
-    });
-    
-    // Serialize et
-    const txBytes = umi.transactions.serialize(await tx.buildAndSign(umi));
-    const transaction = Transaction.from(Buffer.from(txBytes));
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = publicKey!;  // Kullanıcı fee ödesin
-    
-    // Kullanıcı imzalasın
-    const provider = (window as any).solana;
-    if (!provider) throw new Error("Phantom not found");
-    
-    const signed = await provider.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
-    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-    
-    console.log("✅ Metadata created");
-    
-    // 3. REVOKE için aynı işlem
-    if (revokeUpdate) {
-      const updateTx = updateMetadataAccountV2(umi, {
-        metadata: mintPublicKey,
-        updateAuthority: mintSigner,
-        newUpdateAuthority: null,
-        data: null,
-        primarySaleHappened: null,
-        isMutable: false,
-      });
-      
-      const updateTxBytes = umi.transactions.serialize(await updateTx.buildAndSign(umi));
-      const updateTransaction = Transaction.from(Buffer.from(updateTxBytes));
-      updateTransaction.recentBlockhash = blockhash;
-      updateTransaction.feePayer = publicKey!;
-      
-      const signed2 = await provider.signTransaction(updateTransaction);
-      const signature2 = await connection.sendRawTransaction(signed2.serialize());
-      await connection.confirmTransaction({ signature: signature2, blockhash, lastValidBlockHeight }, "confirmed");
-      console.log("✅ Update authority revoked");
-    }
-  } catch (err) {
-    console.error("Metadata creation error:", err);
-    throw err;
-  }
-};
-
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
     if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
@@ -306,7 +226,7 @@ const createMetadata = async (
       return;
     }
 
-    // ========== LOCALSTORAGE RATE LIMIT (1 dakika) ==========
+    // LocalStorage rate limit
     const lastCreate = localStorage.getItem('bluprint_last_create');
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
       const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
@@ -365,6 +285,9 @@ const createMetadata = async (
       // Supply
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
+      // Metadata PDA
+      const metadataPDA = findMetadataPda(mintKeypair.publicKey);
+      
       // Transaction
       setStep("📦 Building transaction...");
       const transaction = new Transaction();
@@ -372,6 +295,7 @@ const createMetadata = async (
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
+      // 1. Mint account oluştur
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -380,15 +304,19 @@ const createMetadata = async (
           lamports,
           programId: TOKEN_PROGRAM_ID,
         }),
+        // 2. Mint'i başlat
         createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null),
+        // 3. Fee transferleri
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare }),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(OWNER_WALLET), lamports: yourShare }),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare }),
+        // 4. ATA oluştur
         createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey),
+        // 5. Token mintle
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // Referral transfer
+      // 6. Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -399,7 +327,7 @@ const createMetadata = async (
         );
       }
 
-      // 1. ve 2. Revoke
+      // 7. 1. ve 2. Revoke (Mint ve Freeze)
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -407,6 +335,36 @@ const createMetadata = async (
         if (revokeFreeze) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.FreezeAccount, null));
         }
+      }
+
+      // 8. METADATA - TEK TRANSACTION İÇİNDE (Pump.fun gibi)
+      if (metadataUri) {
+        const umi = createUmi(RPC_URL);
+        const umiKeypair = fromWeb3JsKeypair(mintKeypair);
+        const mintSigner = createSignerFromKeypair(umi, umiKeypair);
+        umi.use(keypairIdentity(mintSigner));
+        umi.use(mplTokenMetadata());
+        
+        const metadataTx = await createMetadataAccountV3(umi, {
+          mint: umiPublicKey(mintKeypair.publicKey.toBase58()),
+          mintAuthority: mintSigner,
+          updateAuthority: mintSigner,
+          data: {
+            name: tokenName,
+            symbol: tokenSymbol.toUpperCase(),
+            uri: metadataUri,
+            sellerFeeBasisPoints: 0,
+            creators: null,
+            collection: null,
+            uses: null,
+          },
+          isMutable: !revokeUpdate,
+          collectionDetails: null,
+        }).buildAndSign(umi);
+        
+        const txBytes = umi.transactions.serialize(metadataTx);
+        const metadataTransaction = Transaction.from(Buffer.from(txBytes));
+        metadataTransaction.instructions.forEach(ix => transaction.add(ix));
       }
 
       transaction.partialSign(mintKeypair);
@@ -420,12 +378,11 @@ const createMetadata = async (
         maxRetries: MAX_RETRIES,
       });
       
-      // confirmTransaction kaldırıldı - sadece 2 saniye bekle
       setStep("⏳ Finalizing...");
       setProgress(95);
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // ========== SUCCESS EKRANI ==========
+      // Success
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
@@ -450,13 +407,12 @@ const createMetadata = async (
         twitter,
         telegram,
         website,
-        metadataAdding: true,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
       setTokensLeft((prev) => prev - 1);
       
-      // ========== REDIS'E TOKEN KAYDET ==========
+      // Redis'e kaydet
       try {
         await fetch("/api/tokens", {
           method: "POST",
@@ -473,58 +429,23 @@ const createMetadata = async (
             website,
           }),
         });
-        console.log("✅ Token saved to Redis");
       } catch (err) {
         console.error("Failed to save token to Redis:", err);
       }
       
-      // ========== LOCALSTORAGE RATE LIMIT KAYDET ==========
       localStorage.setItem('bluprint_last_create', Date.now().toString());
       
-      // ========== PROMO CODE'U YENİDEN AL ==========
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
         setMyPromoCode(promoData.promoCode);
-      }
-
-      // ========== ARKA PLANDA METADATA EKLE ==========
-      if (metadataUri) {
-        (async () => {
-          try {
-            await createMetadata(mintKeypair, metadataUri, connection);
-            setSuccessData((prev: any) => ({
-              ...prev,
-              metadataAdding: false,
-              metadataAdded: true,
-            }));
-            showToast("✨ Metadata added! Your token now has a name and logo", "success");
-          } catch (err) {
-            console.error("Background metadata failed:", err);
-            setSuccessData((prev: any) => ({
-              ...prev,
-              metadataAdding: false,
-              metadataFailed: true,
-            }));
-            showToast("⚠️ Token created but metadata could not be added. You can add it later.", "warning");
-          }
-        })();
-      } else {
-        setSuccessData((prev: any) => ({
-          ...prev,
-          metadataAdding: false,
-        }));
       }
     } catch (err: any) {
       clearInterval(progressInterval.current!);
       console.error("Create token error:", err);
       
       let errorMessage = err.message || "Unknown error";
-      if (err.message?.includes("block height exceeded")) {
-        errorMessage = "Transaction took too long but may have succeeded. Check your wallet.";
-      } else if (err.message?.includes("User rejected")) {
-        errorMessage = "You rejected the transaction.";
-      } else if (err.message?.includes("insufficient")) {
+      if (err.message?.includes("insufficient")) {
         errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
       }
       
@@ -644,7 +565,6 @@ const createMetadata = async (
                 <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("create_desc_placeholder")} className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none resize-none" />
               </div>
 
-              {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
                   🎫 Promo Code <span className="text-gray-500">(optional - get 0.025 SOL discount!)</span>
