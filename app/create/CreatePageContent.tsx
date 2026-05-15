@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useSearchParams } from "next/navigation";
@@ -76,8 +76,6 @@ export default function CreatePageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const secureToken = revokeMint || revokeFreeze || revokeUpdate;
-
-  // URL'den ref parametresini al (link ile gelen)
   const urlReferrer = searchParams.get("ref");
 
   useEffect(() => setMounted(true), []);
@@ -243,6 +241,7 @@ export default function CreatePageContent() {
       
       await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
+      // 3. REVOKE: Update Authority'yi revoke et
       if (revokeUpdate) {
         const updateTx = await updateMetadataAccountV2(umi, {
           metadata: mintPublicKey,
@@ -268,8 +267,18 @@ export default function CreatePageContent() {
       }
     } catch (err) {
       console.error("Metadata creation error:", err);
+      throw err;
     }
   };
+
+  const validateInputs = useCallback(() => {
+    if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
+    if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
+    if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return "Symbol can only contain letters and numbers";
+    if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return "Supply must be between 1,000 and 10,000,000,000";
+    if (tokenDecimals < 0 || tokenDecimals > 9) return "Decimals must be between 0 and 9";
+    return null;
+  }, [tokenName, tokenSymbol, tokenSupply, tokenDecimals]);
 
   const createToken = async () => {
     if (isProcessing || loading) return;
@@ -278,8 +287,9 @@ export default function CreatePageContent() {
       return;
     }
 
-    if (!tokenName || !tokenSymbol) {
-      showToast("Please enter token name and symbol", "error");
+    const validationError = validateInputs();
+    if (validationError) {
+      showToast(`❌ ${validationError}`, "error");
       return;
     }
 
@@ -296,45 +306,44 @@ export default function CreatePageContent() {
       setProgress((prev) => {
         if (prev >= 90) return 90;
         const elapsed = (Date.now() - start) / 1000;
-        return Math.min(90, Math.floor((elapsed / 15) * 100));
+        return Math.min(90, Math.floor((elapsed / 12) * 100));
       });
     }, 100);
 
     try {
       const connection = new Connection(RPC_URL, "confirmed");
       
-      // ========== PROMO CODE / REFERRAL SİSTEMİ ==========
+      // Referral sistemi
       let finalReferrer: string | null = null;
-      
       if (urlReferrer && urlReferrer.length === 44 && urlReferrer !== publicKey.toString()) {
         finalReferrer = urlReferrer;
       }
-      
       if (!finalReferrer && referrerWallet && referrerWallet !== publicKey.toString()) {
         finalReferrer = referrerWallet;
       }
       
       const hasReferral = !!finalReferrer;
       const feeAmount = hasReferral ? REFERRAL_FEE : BASE_FEE;
-      
       const platformShare = Math.floor(feeAmount * 0.10);
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      console.log("Referral active:", hasReferral, "Referrer:", finalReferrer, "Fee:", feeAmount / LAMPORTS_PER_SOL, "SOL");
-      
       setStep("📤 Uploading metadata to IPFS...");
       const metadataUri = await uploadMetadataToIPFS();
       
+      // Mint keypair
       setStep("🔑 Creating mint account...");
       const mintKeypair = Keypair.generate();
       const lamports = await getMinimumBalanceForRentExemptMint(connection);
       
+      // ATA
       setStep("📝 Creating token account...");
       const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
       
+      // Supply
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
+      // Transaction
       setStep("📦 Building transaction...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
@@ -357,6 +366,7 @@ export default function CreatePageContent() {
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
+      // Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -365,9 +375,9 @@ export default function CreatePageContent() {
             lamports: REFERRAL_REWARD,
           })
         );
-        console.log("✅ Referral transfer added:", REFERRAL_REWARD / LAMPORTS_PER_SOL, "SOL to", finalReferrer);
       }
 
+      // Revoke'lar (1 ve 2)
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -379,8 +389,8 @@ export default function CreatePageContent() {
 
       transaction.partialSign(mintKeypair);
 
-      // ========== GERÇEK TRANSACTION (skipPreflight ile) ==========
-      setStep("📝 Please sign the main transaction...");
+      // İmzala ve gönder
+      setStep("📝 Please sign the transaction...");
       setProgress(92);
       
       const signature = await sendTransaction(transaction, connection, {
@@ -391,7 +401,12 @@ export default function CreatePageContent() {
       setStep("⏳ Confirming...");
       setProgress(95);
       
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      // WebSocket hatasını görmezden gel
+      try {
+        await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      } catch (confirmError) {
+        console.warn("Confirm error (ignored):", confirmError);
+      }
 
       // ========== SUCCESS EKRANI HEMEN GÖSTER ==========
       clearInterval(progressInterval.current!);
@@ -417,24 +432,45 @@ export default function CreatePageContent() {
         twitter,
         telegram,
         website,
+        metadataAdding: true,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
       setTokensLeft((prev) => prev - 1);
-
-      // ========== ARKA PLANDA METADATA EKLE ==========
-      if (metadataUri) {
-        createMetadata(mintKeypair, metadataUri, connection).catch(err => {
-          console.error("Background metadata failed:", err);
-          showToast("⚠️ Token created but metadata could not be added. You can add it later.", "warning");
-        });
-      }
-
+      
       // Promo code'u yeniden al
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
         setMyPromoCode(promoData.promoCode);
+      }
+
+      // ========== ARKA PLANDA METADATA EKLE (KULLANICI BEKLEMEDEN) ==========
+      if (metadataUri) {
+        (async () => {
+          try {
+            await createMetadata(mintKeypair, metadataUri, connection);
+            setSuccessData((prev: any) => ({
+              ...prev,
+              metadataAdding: false,
+              metadataAdded: true,
+            }));
+            showToast("✨ Metadata added! Your token now has a name and logo", "success");
+          } catch (err) {
+            console.error("Background metadata failed:", err);
+            setSuccessData((prev: any) => ({
+              ...prev,
+              metadataAdding: false,
+              metadataFailed: true,
+            }));
+            showToast("⚠️ Token created but metadata could not be added. You can add it later.", "warning");
+          }
+        })();
+      } else {
+        setSuccessData((prev: any) => ({
+          ...prev,
+          metadataAdding: false,
+        }));
       }
     } catch (err: any) {
       clearInterval(progressInterval.current!);
@@ -442,7 +478,7 @@ export default function CreatePageContent() {
       
       let errorMessage = err.message || "Unknown error";
       if (err.message?.includes("block height exceeded")) {
-        errorMessage = "Transaction took too long. Please try again.";
+        errorMessage = "Transaction took too long but may have succeeded. Check your wallet.";
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       } else if (err.message?.includes("insufficient")) {
@@ -496,7 +532,6 @@ export default function CreatePageContent() {
             <motion.div
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: "spring", stiffness: 300 }}
               className="mb-6 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-3 sm:p-4 text-white text-center shadow-2xl"
             >
               <div className="flex items-center justify-center gap-2 flex-wrap text-sm sm:text-base font-bold">
@@ -522,7 +557,6 @@ export default function CreatePageContent() {
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
               className="text-gray-400 mt-3 text-sm sm:text-base"
             >
               {t("create_subtitle")}
@@ -584,11 +618,6 @@ export default function CreatePageContent() {
                     ✅ Valid promo code! You will pay only 0.10 SOL
                   </p>
                 )}
-                {!promoCodeInput && publicKey && !myPromoCode && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    💡 Create a token to get your own promo code
-                  </p>
-                )}
               </div>
             </div>
 
@@ -613,15 +642,10 @@ export default function CreatePageContent() {
                     <span className="text-gray-300">Total to pay:</span>
                     <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.10 SOL" : "0.15 SOL"}</span>
                   </div>
-                  {referrerWallet && (
-                    <div className="text-xs text-green-400 mt-1 animate-pulse">
-                      🎉 Promo code applied! 0.05 SOL will go to the referrer
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* REFERRAL PANEL - PROMO CODE */}
+              {/* REFERRAL PANEL */}
               <div className="rounded-xl p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">💰</span>
@@ -631,7 +655,6 @@ export default function CreatePageContent() {
                   Share your promo code and earn <span className="text-green-400 font-bold">0.05 SOL</span> for every friend who creates a token!
                 </p>
                 
-                {/* Promo Code Göster */}
                 {publicKey && (
                   <div className="mb-3 p-2 bg-gray-800/50 rounded-lg">
                     <p className="text-xs text-gray-400 mb-1">Your Promo Code:</p>
@@ -652,15 +675,9 @@ export default function CreatePageContent() {
                         Copy
                       </button>
                     </div>
-                    {myPromoCode && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        🔗 Share this code with friends: <span className="text-green-400">{myPromoCode}</span>
-                      </p>
-                    )}
                   </div>
                 )}
                 
-                {/* Referral Link (alternatif) */}
                 {publicKey && (
                   <div className="p-2 bg-gray-800/50 rounded-lg">
                     <p className="text-xs text-gray-400 mb-1">Your Referral Link:</p>
