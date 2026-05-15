@@ -207,22 +207,18 @@ const createMetadata = async (
   if (!metadataUri) return;
   
   try {
-    // UMI'yi kullanıcının cüzdanı ile yapılandır
     const umi = createUmi(RPC_URL);
-    
-    // Kullanıcının cüzdanını UMI'ye signer olarak ekle
-    const umiUserKeypair = fromWeb3JsKeypair(Keypair.fromSecretKey(publicKey!.toBuffer()));
-    const userSigner = createSignerFromKeypair(umi, umiUserKeypair);
-    umi.use(keypairIdentity(userSigner));
+    const umiKeypair = fromWeb3JsKeypair(mintKeypair);
+    const mintSigner = createSignerFromKeypair(umi, umiKeypair);
+    umi.use(keypairIdentity(mintSigner));
     umi.use(mplTokenMetadata());
 
     const mintPublicKey = umiPublicKey(mintKeypair.publicKey.toBase58());
 
-    // Metadata account oluştur - kullanıcı imzalayacak
     const tx = await createMetadataAccountV3(umi, {
       mint: mintPublicKey,
-      mintAuthority: userSigner,  // Kullanıcının cüzdanı
-      updateAuthority: userSigner, // Kullanıcının cüzdanı
+      mintAuthority: mintSigner,
+      updateAuthority: mintSigner,
       data: {
         name: tokenName,
         symbol: tokenSymbol.toUpperCase(),
@@ -236,23 +232,41 @@ const createMetadata = async (
       collectionDetails: null,
     }).buildAndSign(umi);
 
-    // UMI ile direkt gönder
-    const signature = await umi.rpc.sendTransaction(tx);
-    console.log("✅ Metadata created with signature:", signature);
+    const txBytes = umi.transactions.serialize(tx);
+    const transaction = Transaction.from(Buffer.from(txBytes));
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = publicKey!;
     
-    // 3. REVOKE: Update Authority'yi revoke et
+    // ========== KULLANICI İMZALASIN ==========
+    const provider = (window as any).solana;
+    if (!provider) throw new Error("Phantom wallet not found");
+    
+    const signed = await provider.signTransaction(transaction);
+    const signature = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+    
+    console.log("✅ Metadata created");
+    
     if (revokeUpdate) {
       const updateTx = await updateMetadataAccountV2(umi, {
         metadata: mintPublicKey,
-        updateAuthority: userSigner,
+        updateAuthority: mintSigner,
         newUpdateAuthority: null,
         data: null,
         primarySaleHappened: null,
         isMutable: false,
       }).buildAndSign(umi);
       
-      const signature2 = await umi.rpc.sendTransaction(updateTx);
-      console.log("✅ Update authority revoked with signature:", signature2);
+      const updateTxBytes = umi.transactions.serialize(updateTx);
+      const updateTransaction = Transaction.from(Buffer.from(updateTxBytes));
+      updateTransaction.recentBlockhash = blockhash;
+      updateTransaction.feePayer = publicKey!;
+      
+      const signed2 = await provider.signTransaction(updateTransaction);
+      const signature2 = await connection.sendRawTransaction(signed2.serialize());
+      await connection.confirmTransaction({ signature: signature2, blockhash, lastValidBlockHeight }, "confirmed");
+      console.log("✅ Update authority revoked");
     }
   } catch (err) {
     console.error("Metadata creation error:", err);
