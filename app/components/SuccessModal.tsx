@@ -51,7 +51,7 @@ export default function SuccessModal({
       const mint = new PublicKey(mintAddress);
       const metadataPDA = findMetadataPda(mint);
 
-      // Önce IPFS'e metadata yükle
+      // IPFS'e metadata yükle
       const metadataRes = await fetch("/api/upload-metadata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,7 +59,7 @@ export default function SuccessModal({
           name: successData.metadataName || successData.name,
           symbol: successData.metadataSymbol || successData.symbol,
           description: successData.description || "Launched on BluPrint Platform",
-          image: successData.tokenImage || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
+          image: successData.tokenImage || successData.image || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
           external_url: successData.website || "https://bluprint.fun",
           twitter: successData.twitter || "",
           telegram: successData.telegram || "",
@@ -67,8 +67,9 @@ export default function SuccessModal({
       });
 
       const metadataData = await metadataRes.json();
-      if (!metadataData.success) throw new Error("IPFS upload failed");
+      if (!metadataData.success) throw new Error("IPFS upload failed: " + (metadataData.error || "Unknown"));
 
+      // ========== METADATA INSTRUCTION - updateAuthority = null ==========
       const instruction = createCreateMetadataAccountV3Instruction(
         {
           metadata: metadataPDA,
@@ -76,6 +77,7 @@ export default function SuccessModal({
           mintAuthority: publicKey,
           payer: publicKey,
           updateAuthority: publicKey,
+
         },
         {
           createMetadataAccountArgsV3: {
@@ -88,14 +90,14 @@ export default function SuccessModal({
               collection: null,
               uses: null,
             },
-            isMutable: !successData.revokeUpdate,
+            isMutable: false,
             collectionDetails: null,
           },
         }
       );
 
       const transaction = new Transaction().add(instruction);
-      const { blockhash } = await connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
@@ -104,13 +106,19 @@ export default function SuccessModal({
         maxRetries: 2,
       });
 
-      await connection.confirmTransaction(signature, "confirmed");
+      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
       setMetadataAdded(true);
-      showToast("✨ Metadata added successfully! Your token now has a name and logo.", "success");
+      showToast("✨ Metadata added successfully! Your token now has a name and logo on Solscan.", "success");
     } catch (err: any) {
       console.error("Metadata error:", err);
-      showToast(`❌ Failed to add metadata: ${err.message}`, "error");
+      let errorMsg = err.message || "Unknown error";
+      if (errorMsg.includes("Custom program error: 0x0")) {
+        errorMsg = "Metadata already exists for this token.";
+      } else if (errorMsg.includes("0x10")) {
+        errorMsg = "Authority error. Please try again.";
+      }
+      showToast(`❌ Failed to add metadata: ${errorMsg}`, "error");
     } finally {
       setAddingMetadata(false);
     }
@@ -159,7 +167,7 @@ export default function SuccessModal({
           </div>
         </div>
 
-        {/* METADATA BUTONU - Eğer metadata eklenmediyse göster */}
+        {/* METADATA BUTONU */}
         {!metadataAdded && (
           <button
             onClick={addMetadata}
