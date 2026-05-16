@@ -9,22 +9,15 @@ import {
   LAMPORTS_PER_SOL, PublicKey,
 } from "@solana/web3.js";
 import {
-  ExtensionType,
-  getMintLen,
-  TOKEN_2022_PROGRAM_ID,
   createInitializeMintInstruction,
-  createInitializeMetadataPointerInstruction,
-  createInitializeInstruction as createInitializeTokenMetadataInstruction,
+  getMinimumBalanceForRentExemptMint,
+  MINT_SIZE, TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   createSetAuthorityInstruction,
   AuthorityType,
-  getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import {
-  pack,
-  TokenMetadata,
-} from "@solana/spl-token-metadata";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
@@ -157,50 +150,6 @@ export default function CreatePageContent() {
     }
   };
 
-  const uploadMetadataToIPFS = async (): Promise<string | null> => {
-    const pinataJwt = process.env.NEXT_PUBLIC_PINATA_JWT;
-    if (!pinataJwt) {
-      console.warn("No Pinata JWT found");
-      return null;
-    }
-    
-    const metadata = {
-      name: tokenName,
-      symbol: tokenSymbol.toUpperCase(),
-      description: description || "Launched on BluPrint Platform (Token-2022)",
-      image: tokenImage || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
-      external_url: website || "https://bluprint.fun",
-      attributes: [
-        { trait_type: "Platform", value: "BluPrint" },
-        { trait_type: "Type", value: "Meme Coin" },
-        { trait_type: "Standard", value: "Token-2022" },
-        { trait_type: "Twitter", value: twitter || "" },
-        { trait_type: "Telegram", value: telegram || "" },
-      ],
-    };
-    
-    try {
-      const res = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${pinataJwt}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          pinataContent: metadata, 
-          pinataMetadata: { name: `metadata-${tokenName}-${Date.now()}` } 
-        }),
-      });
-      const data = await res.json();
-      if (!data.IpfsHash) throw new Error("IPFS upload failed");
-      console.log("✅ IPFS URI:", data.IpfsHash);
-      return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
-    } catch (err) {
-      console.error("IPFS upload error:", err);
-      return null;
-    }
-  };
-
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
     if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
@@ -265,105 +214,41 @@ export default function CreatePageContent() {
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      // IPFS Metadata yükle
-      setStep("📤 Uploading metadata to IPFS...");
-      const metadataUri = await uploadMetadataToIPFS();
-      
-      // Mint keypair
-      setStep("🔑 Creating mint account (Token-2022)...");
+      // Mint keypair (SPL Token)
+      setStep("🔑 Creating mint account...");
       const mintKeypair = Keypair.generate();
+      const lamports = await getMinimumBalanceForRentExemptMint(connection);
       
-      // Token Metadata nesnesi (boyut hesaplama için)
-      const tokenMetadata: TokenMetadata = {
-        mint: mintKeypair.publicKey,
-        name: tokenName,
-        symbol: tokenSymbol.toUpperCase(),
-        uri: metadataUri || "",
-        additionalMetadata: [
-          ["description", description || "Launched on BluPrint Platform"],
-          ["twitter", twitter || ""],
-          ["telegram", telegram || ""],
-          ["website", website || ""],
-        ],
-      };
-      
-      // KRİTİK: Doğru boyut hesaplaması
-      const mintLen = getMintLen([ExtensionType.MetadataPointer]);
-      const metadataLen = pack(tokenMetadata).length;
-      const totalLen = mintLen + metadataLen;
-      const lamports = await connection.getMinimumBalanceForRentExemption(totalLen);
-      
-      console.log(`📦 Mint space: ${totalLen} bytes (mint: ${mintLen}, metadata: ${metadataLen})`);
-      
-      // ATA adresi (Token-2022 için)
-      setStep("📝 Preparing token account...");
-      const ata = getAssociatedTokenAddressSync(
-        mintKeypair.publicKey,
-        publicKey,
-        false,
-        TOKEN_2022_PROGRAM_ID
-      );
+      // ATA
+      setStep("📝 Creating token account...");
+      const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
       
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
-      // Transaction oluştur
+      // Transaction
       setStep("📦 Building transaction...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // ========== INSTRUCTION'LAR SIRASIYLA (ÇOK ÖNEMLİ) ==========
-      
-      // 1. Mint account oluştur (Token-2022)
+      // 1. Mint account oluştur
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
           newAccountPubkey: mintKeypair.publicKey,
-          space: totalLen,
+          space: MINT_SIZE,
           lamports,
-          programId: TOKEN_2022_PROGRAM_ID,
+          programId: TOKEN_PROGRAM_ID,
         })
       );
 
-      // 2. Metadata Pointer Extension'ı başlat
+      // 2. Mint'i başlat
       transaction.add(
-        createInitializeMetadataPointerInstruction(
-          mintKeypair.publicKey,
-          publicKey,
-          mintKeypair.publicKey,
-          TOKEN_2022_PROGRAM_ID
-        )
+        createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null)
       );
 
-      // 3. Mint'i başlat (Token-2022)
-      transaction.add(
-        createInitializeMintInstruction(
-          mintKeypair.publicKey,
-          tokenDecimals,
-          publicKey,
-          secureToken ? publicKey : null,
-          TOKEN_2022_PROGRAM_ID
-        )
-      );
-
-      // 4. Metadata'yı mint hesabına yaz
-      if (metadataUri) {
-        transaction.add(
-          createInitializeTokenMetadataInstruction({
-            programId: TOKEN_2022_PROGRAM_ID,
-            mint: mintKeypair.publicKey,
-            metadata: mintKeypair.publicKey,
-            name: tokenMetadata.name,
-            symbol: tokenMetadata.symbol,
-            uri: tokenMetadata.uri,
-            mintAuthority: publicKey,
-            updateAuthority: publicKey,
-          })
-        );
-      }
-
-      // 5. Fee transferleri
+      // 3. Fee transferleri
       transaction.add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare })
       );
@@ -374,30 +259,17 @@ export default function CreatePageContent() {
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare })
       );
 
-      // 6. ATA oluştur (Token-2022)
+      // 4. ATA oluştur
       transaction.add(
-        createAssociatedTokenAccountInstruction(
-          publicKey,
-          ata,
-          publicKey,
-          mintKeypair.publicKey,
-          TOKEN_2022_PROGRAM_ID
-        )
+        createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey)
       );
 
-      // 7. Token mintle
+      // 5. Token mintle
       transaction.add(
-        createMintToInstruction(
-          mintKeypair.publicKey,
-          ata,
-          publicKey,
-          supply,
-          [],
-          TOKEN_2022_PROGRAM_ID
-        )
+        createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // 8. Referral transfer
+      // 6. Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -408,30 +280,16 @@ export default function CreatePageContent() {
         );
       }
 
-      // 9. Revoke'lar (Mint ve Freeze)
+      // 7. Revoke'lar
       if (secureToken) {
         if (revokeMint) {
           transaction.add(
-            createSetAuthorityInstruction(
-              mintKeypair.publicKey,
-              publicKey,
-              AuthorityType.MintTokens,
-              null,
-              [],
-              TOKEN_2022_PROGRAM_ID
-            )
+            createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null)
           );
         }
         if (revokeFreeze) {
           transaction.add(
-            createSetAuthorityInstruction(
-              mintKeypair.publicKey,
-              publicKey,
-              AuthorityType.FreezeAccount,
-              null,
-              [],
-              TOKEN_2022_PROGRAM_ID
-            )
+            createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.FreezeAccount, null)
           );
         }
       }
@@ -452,7 +310,7 @@ export default function CreatePageContent() {
 
       clearInterval(progressInterval.current!);
       setProgress(100);
-      setStep("✅ Done! Your Token-2022 with metadata is ready!");
+      setStep("✅ Done! Your token is ready!");
 
       setTime((Date.now() - start) / 1000);
       const newMintAddress = mintKeypair.publicKey.toBase58();
@@ -476,8 +334,6 @@ export default function CreatePageContent() {
         website,
         tokenImage,
         description,
-        metadataAdded: !!metadataUri,
-        isToken2022: true,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
@@ -498,7 +354,6 @@ export default function CreatePageContent() {
             twitter,
             telegram,
             website,
-            isToken2022: true,
           }),
         });
         console.log("✅ Token saved to Redis");
@@ -519,7 +374,7 @@ export default function CreatePageContent() {
       
       let errorMessage = err.message || "Unknown error";
       if (err.message?.includes("insufficient")) {
-        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL + rent (~0.01 SOL).";
+        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       }
@@ -580,7 +435,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.05 SOL (Token-2022)</span>
+                <span className="font-bold">0.05 SOL</span>
               </div>
             </motion.div>
           )}
@@ -598,11 +453,12 @@ export default function CreatePageContent() {
               animate={{ opacity: 1 }}
               className="text-gray-400 mt-3 text-sm sm:text-base"
             >
-              {t("create_subtitle")} <span className="text-green-400">(Token-2022 with Metadata)</span>
+              {t("create_subtitle")}
             </motion.p>
           </div>
 
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-8">
+            {/* SOL TARAF - FORM */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 space-y-4 sm:space-y-6">
               <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
@@ -639,6 +495,7 @@ export default function CreatePageContent() {
                 <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("create_desc_placeholder")} className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none resize-none" />
               </div>
 
+              {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
                   🎫 Promo Code <span className="text-gray-500">(optional - get 0.02 SOL discount!)</span>
@@ -658,6 +515,7 @@ export default function CreatePageContent() {
               </div>
             </div>
 
+            {/* SAĞ TARAF - LAUNCH PANEL */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 lg:sticky lg:top-28 space-y-4">
               <div className="text-center">
                 <div className="text-5xl mb-2 animate-pulse">⚡</div>
@@ -681,6 +539,7 @@ export default function CreatePageContent() {
                 </div>
               </div>
 
+              {/* REFERRAL PANEL */}
               <div className="rounded-xl p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">💰</span>
@@ -740,6 +599,7 @@ export default function CreatePageContent() {
                 {!publicKey && <p className="text-xs text-yellow-500 mt-2">⚠️ Connect wallet to get your promo code and referral link</p>}
               </div>
 
+              {/* Secure Token - 3 Revoke */}
               <div className="rounded-xl p-4 sm:p-5 bg-gradient-to-r from-blue-600/30 to-purple-600/30 backdrop-blur-sm border border-blue-500/30 shadow-lg">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-base font-bold text-white">🔒 {t("create_secure_label")}</span>

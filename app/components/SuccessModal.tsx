@@ -1,20 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
-import {
-  ExtensionType,
-  getMintLen,
-  TOKEN_2022_PROGRAM_ID,
-  createInitializeMetadataPointerInstruction,
-  createInitializeInstruction,
-} from "@solana/spl-token";
-import { pack, TokenMetadata } from "@solana/spl-token-metadata";
 import { motion } from "framer-motion";
 import { useToast } from "./ToastProvider";
-
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=fdbb8762-06b5-4bbd-ab1e-33310587e2d4";
 
 export default function SuccessModal({
   successData,
@@ -29,106 +16,7 @@ export default function SuccessModal({
   onReset: () => void;
   onHome: () => void;
 }) {
-  const { publicKey, sendTransaction, connected } = useWallet();
   const { showToast } = useToast();
-  const [addingMetadata, setAddingMetadata] = useState(false);
-  const [metadataAdded, setMetadataAdded] = useState(false);
-
-  const addMetadata = async () => {
-    if (!publicKey || !connected) {
-      showToast("Please connect your wallet", "error");
-      return;
-    }
-
-    setAddingMetadata(true);
-    try {
-      const connection = new Connection(RPC_URL, "confirmed");
-      const mint = new PublicKey(mintAddress);
-
-      // 1. IPFS'e metadata yükle
-      const metadataRes = await fetch("/api/upload-metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: successData.name,
-          symbol: successData.symbol,
-          description: successData.description || "Launched on BluPrint Platform",
-          image: successData.tokenImage || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
-          external_url: successData.website || "https://bluprint.fun",
-          twitter: successData.twitter || "",
-          telegram: successData.telegram || "",
-        }),
-      });
-
-      const metadataData = await metadataRes.json();
-      if (!metadataData.success) throw new Error("IPFS upload failed: " + (metadataData.error || "Unknown"));
-
-      // 2. Token Metadata nesnesi
-      const tokenMetadata: TokenMetadata = {
-        mint,
-        name: successData.name,
-        symbol: successData.symbol.toUpperCase(),
-        uri: metadataData.uri,
-        additionalMetadata: [
-          ["description", successData.description || "Launched on BluPrint Platform"],
-          ["twitter", successData.twitter || ""],
-          ["telegram", successData.telegram || ""],
-          ["website", successData.website || ""],
-        ],
-      };
-
-      // 3. Mint hesabını kontrol et
-      const mintAccountInfo = await connection.getAccountInfo(mint);
-      if (!mintAccountInfo) {
-        throw new Error("Mint account not found");
-      }
-
-      // 4. Transaction oluştur
-      const transaction = new Transaction();
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Metadata Pointer Extension
-      transaction.add(
-        createInitializeMetadataPointerInstruction(
-          mint,
-          publicKey,
-          mint,
-          TOKEN_2022_PROGRAM_ID
-        )
-      );
-
-      // Metadata'yı yaz
-      transaction.add(
-        createInitializeInstruction({
-          programId: TOKEN_2022_PROGRAM_ID,
-          mint,
-          metadata: mint,
-          name: tokenMetadata.name,
-          symbol: tokenMetadata.symbol,
-          uri: tokenMetadata.uri,
-          mintAuthority: publicKey,
-          updateAuthority: publicKey,
-        })
-      );
-
-      const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: true,
-        maxRetries: 2,
-      });
-
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-
-      setMetadataAdded(true);
-      showToast("✨ Metadata added! Your token now has a name and logo on Solscan.", "success");
-    } catch (err: any) {
-      console.error("Metadata error:", err);
-      showToast(`❌ Failed to add metadata: ${err.message}`, "error");
-    } finally {
-      setAddingMetadata(false);
-    }
-  };
 
   return (
     <motion.div
@@ -141,9 +29,10 @@ export default function SuccessModal({
           <div className="text-6xl mb-4">🚀</div>
           <h2 className="text-2xl font-bold text-white mb-2">YOUR TOKEN IS LIVE!</h2>
           <p className="text-green-400 text-sm mb-4">⚡ Created in {time.toFixed(2)} seconds</p>
+          <p className="text-yellow-400 text-xs mt-2">✨ Metadata (name, logo, symbol) coming soon!</p>
         </div>
 
-        <div className="space-y-3 bg-gray-800/50 rounded-xl p-4 mb-6">
+        <div className="space-y-3 bg-gray-800/50 rounded-xl p-4 mb-6 mt-4">
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Token Name:</span>
             <span className="text-white font-semibold">{successData.name}</span>
@@ -172,33 +61,6 @@ export default function SuccessModal({
             </div>
           </div>
         </div>
-
-        {/* METADATA BUTONU */}
-        {!metadataAdded && (
-          <button
-            onClick={addMetadata}
-            disabled={addingMetadata}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition mb-3 flex items-center justify-center gap-2"
-          >
-            {addingMetadata ? (
-              <>
-                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Adding Metadata...
-              </>
-            ) : (
-              "✨ Add Metadata (Name, Logo, Symbol)"
-            )}
-          </button>
-        )}
-
-        {metadataAdded && (
-          <div className="text-center text-green-400 text-sm mb-3">
-            ✅ Metadata added! Your token now has a name and logo on Solscan.
-          </div>
-        )}
 
         <div className="flex gap-3">
           <button
