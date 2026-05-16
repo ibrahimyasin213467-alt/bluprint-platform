@@ -29,7 +29,6 @@ import SuccessModal from "../components/SuccessModal";
 import { useToast } from "../components/ToastProvider";
 import { useI18n } from "../lib/i18n-provider";
 
-// ==================== CONFIG ====================
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET    = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
@@ -38,7 +37,8 @@ const BASE_FEE        = 0.05 * LAMPORTS_PER_SOL;
 const REFERRAL_FEE    = 0.03 * LAMPORTS_PER_SOL;
 const REFERRAL_REWARD = 0.02 * LAMPORTS_PER_SOL;
 
-// Metaplex metadata instruction'ı — UMI kullanmadan, direkt web3.js ile
+const SYSVAR_RENT_PUBKEY = new PublicKey("SysvarRent111111111111111111111111111111111");
+
 function buildMetadataInstruction(
   mint: PublicKey,
   mintAuthority: PublicKey,
@@ -63,7 +63,9 @@ function buildMetadataInstruction(
       mint,
       mintAuthority,
       payer,
-      updateAuthority: mintAuthority,
+      updateAuthority: payer,
+      systemProgram: SystemProgram.programId,
+      rent: SYSVAR_RENT_PUBKEY,
     },
     {
       createMetadataAccountArgsV3: {
@@ -150,7 +152,7 @@ export default function CreatePageContent() {
       .then((d) => {
         if (d.success && d.wallet && d.wallet !== publicKey?.toString()) {
           setReferrerWallet(d.wallet);
-          showToast("Promo code applied! 0.05 SOL discount!", "success");
+          showToast("Promo code applied! Discount active!", "success");
         } else {
           setReferrerWallet(null);
         }
@@ -219,7 +221,7 @@ export default function CreatePageContent() {
     const lastCreate = localStorage.getItem("bluprint_last_create");
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60_000) {
       const remaining = Math.ceil((60_000 - (Date.now() - parseInt(lastCreate))) / 1000);
-      showToast(`Please wait ${remaining}s before creating another token`, "error");
+      showToast(`Please wait ${remaining}s`, "error");
       return;
     }
 
@@ -241,24 +243,22 @@ export default function CreatePageContent() {
     try {
       const connection = new Connection(RPC_URL, "confirmed");
 
-      // Referral
       const finalReferrer =
         referrerWallet && referrerWallet !== publicKey.toString() ? referrerWallet :
         urlReferrer && urlReferrer.length === 44 && urlReferrer !== publicKey.toString() ? urlReferrer :
         null;
-      const feeAmount   = finalReferrer ? REFERRAL_FEE : BASE_FEE;
+
+      const feeAmount     = finalReferrer ? REFERRAL_FEE : BASE_FEE;
       const platformShare = Math.floor(feeAmount * 0.10);
       const yourShare     = Math.floor(feeAmount * 0.58);
       const kuzenShare    = feeAmount - platformShare - yourShare;
 
-      // IPFS metadata (sunucu tarafında)
       setStep("📤 Uploading metadata...");
       const metadataUri = await uploadMetadata();
 
-      // Mint keypair
-      const mintKeypair = Keypair.generate();
-      const lamports    = await getMinimumBalanceForRentExemptMint(connection);
-      const ata         = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
+      const mintKeypair  = Keypair.generate();
+      const lamports     = await getMinimumBalanceForRentExemptMint(connection);
+      const ata          = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
       const supplyBigInt = BigInt(tokenSupply) * BigInt(10) ** BigInt(tokenDecimals);
 
       setStep("📦 Building transaction...");
@@ -268,7 +268,7 @@ export default function CreatePageContent() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
 
-      // Mint account oluştur
+      // 1. Mint account oluştur
       tx.add(SystemProgram.createAccount({
         fromPubkey: publicKey,
         newAccountPubkey: mintKeypair.publicKey,
@@ -277,22 +277,24 @@ export default function CreatePageContent() {
         programId: TOKEN_PROGRAM_ID,
       }));
 
-      // Mint initialize
+      // 2. Mint initialize — freeze authority: secureToken ise user, değilse null
       tx.add(createInitializeMintInstruction(
-        mintKeypair.publicKey, tokenDecimals, publicKey,
+        mintKeypair.publicKey,
+        tokenDecimals,
+        publicKey,
         secureToken ? publicKey : null,
       ));
 
-      // Platform fee
+      // 3. Fee transferleri
       tx.add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare }));
-      tx.add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(OWNER_WALLET),    lamports: yourShare }));
-      tx.add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET),    lamports: kuzenShare }));
+      tx.add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(OWNER_WALLET), lamports: yourShare }));
+      tx.add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare }));
 
-      // Token hesabı + mint
+      // 4. Token hesabı oluştur + mint
       tx.add(createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey));
       tx.add(createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supplyBigInt));
 
-      // Referral
+      // 5. Referral
       if (finalReferrer) {
         tx.add(SystemProgram.transfer({
           fromPubkey: publicKey,
@@ -301,24 +303,34 @@ export default function CreatePageContent() {
         }));
       }
 
-      // Revoke: Mint ve Freeze
-      if (revokeMint)   tx.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens,    null));
-      if (revokeFreeze) tx.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.FreezeAccount, null));
+      // 6. Revoke: Mint Authority
+      if (revokeMint) {
+        tx.add(createSetAuthorityInstruction(
+          mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null,
+        ));
+      }
 
-      // Metadata (direkt instruction — versioned transaction sorunu yok)
+      // 7. Revoke: Freeze Authority
+      if (revokeFreeze) {
+        tx.add(createSetAuthorityInstruction(
+          mintKeypair.publicKey, publicKey, AuthorityType.FreezeAccount, null,
+        ));
+      }
+
+      // 8. Metadata — en sona ekle, mint authority henüz revoke edilmemişken
       if (metadataUri) {
         tx.add(buildMetadataInstruction(
           mintKeypair.publicKey,
-          publicKey, // mintAuthority = kullanıcı cüzdanı
+          publicKey,
           publicKey,
           tokenName,
           tokenSymbol.toUpperCase(),
           metadataUri,
-          !revokeUpdate, // revokeUpdate seçildiyse isMutable=false
+          !revokeUpdate,
         ));
       }
 
-      // mintKeypair imzalar (yeni mint account için)
+      // mintKeypair kendi hesabını oluşturduğu için imzalamak zorunda
       tx.partialSign(mintKeypair);
 
       setStep("📝 Sign in your wallet...");
@@ -353,16 +365,15 @@ export default function CreatePageContent() {
         secureToken,
         revokeMint, revokeFreeze, revokeUpdate,
         referralApplied: !!finalReferrer,
-        referrer: finalReferrer,
         feePaid: feeAmount / LAMPORTS_PER_SOL,
         twitter, telegram, website,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
-      setTokensLeft((p) => p - 1);
+      setTokensLeft((p) => Math.max(0, p - 1));
       localStorage.setItem("bluprint_last_create", Date.now().toString());
 
-      // Redis kaydet
+      // Arka planda Redis kaydet
       fetch("/api/tokens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -374,7 +385,6 @@ export default function CreatePageContent() {
         }),
       }).catch(console.error);
 
-      // Referral kaydı
       if (finalReferrer) {
         fetch("/api/referral-earnings", {
           method: "POST",
@@ -387,7 +397,6 @@ export default function CreatePageContent() {
         }).catch(console.error);
       }
 
-      // Promo kodu yenile
       fetch(`/api/promo?wallet=${publicKey.toString()}`)
         .then((r) => r.json())
         .then((d) => { if (d.success && d.promoCode) setMyPromoCode(d.promoCode); })
@@ -396,8 +405,8 @@ export default function CreatePageContent() {
     } catch (err: any) {
       clearInterval(progressInterval.current!);
       let msg = err.message || "Unknown error";
-      if (msg.includes("insufficient")) msg = "Insufficient SOL. Need at least 0.15 SOL.";
-      else if (msg.includes("User rejected") || msg.includes("rejected")) msg = "Transaction rejected.";
+      if (msg.includes("insufficient")) msg = "Insufficient SOL balance.";
+      else if (msg.includes("rejected")) msg = "Transaction rejected.";
       setStatus(`❌ ${msg}`);
       setProgress(0);
       showToast(`❌ ${msg}`, "error");
@@ -435,11 +444,9 @@ export default function CreatePageContent() {
           {tokensLeft > 0 && (
             <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
               className="mb-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-3 sm:p-4 text-white text-center shadow-2xl">
-              <div className="flex items-center justify-center gap-2 text-sm sm:text-base font-bold">
-                <span>🎁 {t("pool_title")} 🎁</span>
-              </div>
+              <div className="text-sm sm:text-base font-bold">🎁 {t("pool_title")} 🎁</div>
               <div className="text-xs sm:text-sm mt-1">
-                ⚡ First <span className="font-bold text-xl">{tokensLeft}</span> tokens: <span className="font-bold">0.15 SOL</span>
+                ⚡ First <span className="font-bold text-xl">{tokensLeft}</span> tokens: <span className="font-bold">0.05 SOL</span>
               </div>
             </motion.div>
           )}
@@ -449,8 +456,7 @@ export default function CreatePageContent() {
               className="text-3xl sm:text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
               {t("create_title")}
             </motion.h2>
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="text-gray-400 mt-3 text-sm sm:text-base">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-gray-400 mt-3 text-sm sm:text-base">
               {t("create_subtitle")}
             </motion.p>
           </div>
@@ -459,7 +465,6 @@ export default function CreatePageContent() {
 
             {/* FORM */}
             <div className="bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-white/20 p-4 sm:p-8 space-y-4">
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_name_label")}</label>
@@ -505,14 +510,12 @@ export default function CreatePageContent() {
 
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
-                  🎫 Promo Code <span className="text-gray-500 text-xs">(optional – save 0.05 SOL)</span>
+                  🎫 Promo Code <span className="text-gray-500 text-xs">(optional – save 0.02 SOL)</span>
                 </label>
                 <input type="text" value={promoCodeInput} onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
                   placeholder="Enter 7-char promo code"
                   className="w-full h-11 px-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white focus:ring-2 focus:ring-green-500 outline-none uppercase" />
-                {referrerWallet && (
-                  <p className="text-xs text-green-400 mt-1">✅ Valid! You pay only 0.10 SOL</p>
-                )}
+                {referrerWallet && <p className="text-xs text-green-400 mt-1">✅ Valid! Discount applied</p>}
               </div>
             </div>
 
@@ -532,7 +535,7 @@ export default function CreatePageContent() {
                   {hasReferral && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">Discount applied</span>
-                      <span className="text-green-400">-0.05 SOL</span>
+                      <span className="text-green-400">-0.02 SOL</span>
                     </div>
                   )}
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
@@ -542,7 +545,6 @@ export default function CreatePageContent() {
                 </div>
               </div>
 
-              {/* Referral Panel */}
               {publicKey && (
                 <div className="rounded-xl p-3 bg-green-600/10 border border-green-500/30">
                   <p className="text-xs font-bold text-green-400 mb-2">💰 YOUR REFERRAL</p>
@@ -550,7 +552,7 @@ export default function CreatePageContent() {
                     <div>
                       <p className="text-xs text-gray-400 mb-1">Promo Code:</p>
                       <div className="flex gap-2">
-                        <code className="flex-1 px-3 py-2 text-sm font-mono bg-gray-900 rounded-lg text-green-400 border border-gray-700">
+                        <code className="flex-1 px-3 py-2 text-sm font-mono bg-gray-900 rounded-lg text-green-400 border border-gray-700 truncate">
                           {myPromoCode || "Create a token first"}
                         </code>
                         <button onClick={() => { if (myPromoCode) { navigator.clipboard.writeText(myPromoCode); showToast("Copied!", "success"); } }}
@@ -575,7 +577,6 @@ export default function CreatePageContent() {
                 </div>
               )}
 
-              {/* Secure Token */}
               <div className="rounded-xl p-4 bg-blue-600/20 border border-blue-500/30">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-bold text-white">🔒 {t("create_secure_label")}</span>
