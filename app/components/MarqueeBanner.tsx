@@ -1,39 +1,86 @@
 "use client";
 
-export default function MarqueeBanner() {
-  const items = [
-    { name: "BONK", change: "+45%", image: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png", link: "/token/1" },
-    { name: "WIF", change: "+120%", image: "", link: "/token/2" },
-    { name: "POPCAT", change: "+67%", image: "", link: "/token/3" },
-    { name: "MYRO", change: "+23%", image: "", link: "/token/4" },
-    { name: "BLUEP", change: "+890%", image: "/favicon.ico", link: "/token/5" },
-  ];
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
 
-  const marqueeItems = [...items, ...items, ...items];
+interface BoostToken {
+  id: string;
+  mint: string;
+  name: string;
+  symbol: string;
+  image?: string;
+  boostCount: number;
+}
+
+export default function MarqueeBanner() {
+  const [boostTokens, setBoostTokens] = useState<BoostToken[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBoostTokens();
+    const interval = setInterval(fetchBoostTokens, 30000); // 30 saniyede bir yenile
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchBoostTokens = async () => {
+    try {
+      const res = await fetch("/api/boost/tokens");
+      const data = await res.json();
+      if (data.success) {
+        setBoostTokens(data.tokens);
+      }
+    } catch (err) {
+      console.error("Failed to fetch boost tokens:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || boostTokens.length === 0) {
+    return null;
+  }
+
+  // 3 kez tekrarla (kesintisiz kayma için)
+  const marqueeItems = [...boostTokens, ...boostTokens, ...boostTokens];
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-20 bg-gradient-to-r from-blue-900 via-purple-900 to-blue-900 border-b border-blue-500/30 py-2 shadow-lg">
-      <div className="overflow-hidden whitespace-nowrap">
-        <div className="inline-flex animate-marquee gap-6">
-          {marqueeItems.map((item, idx) => (
-            <a
-              key={idx}
-              href={item.link}
-              className="inline-flex items-center gap-2 px-2 hover:opacity-80 transition group"
+    <div className="relative w-full overflow-hidden bg-gradient-to-r from-purple-900/50 via-blue-900/50 to-purple-900/50 py-2 border-y border-purple-500/30">
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent blur-xl" />
+      
+      <div className="relative flex overflow-hidden whitespace-nowrap">
+        <motion.div
+          animate={{ x: ["0%", "-50%"] }}
+          transition={{
+            duration: 30,
+            ease: "linear",
+            repeat: Infinity,
+          }}
+          className="flex gap-6"
+        >
+          {marqueeItems.map((token, index) => (
+            <Link
+              key={`${token.id}-${index}`}
+              href={`/?boost=${token.mint}`}
+              className="flex items-center gap-2 px-4 py-1 bg-gray-800/50 rounded-full border border-purple-500/30 hover:border-purple-500 hover:bg-gray-800/70 transition-all duration-200 group cursor-pointer"
             >
-              {item.image ? (
-                <img src={item.image} alt={item.name} className="w-5 h-5 rounded-full" />
+              {token.image ? (
+                <img src={token.image} alt={token.name} className="w-5 h-5 rounded-full" />
               ) : (
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                  <span className="text-[10px] text-white">{item.name.charAt(0)}</span>
+                <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-[10px]">
+                  🚀
                 </div>
               )}
-              <span className="text-white font-semibold text-sm">{item.name}</span>
-              <span className="text-green-400 text-sm font-mono">{item.change}</span>
-              <span className="text-blue-400 text-xs opacity-0 group-hover:opacity-100 transition">Buy →</span>
-            </a>
+              <span className="text-sm font-semibold text-white group-hover:text-purple-300 transition">
+                {token.symbol}
+              </span>
+              <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">
+                +{token.boostCount} boost
+              </span>
+              <span className="text-xs text-gray-500 group-hover:text-purple-400 transition">✨</span>
+            </Link>
           ))}
-        </div>
+        </motion.div>
       </div>
     </div>
   );

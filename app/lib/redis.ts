@@ -12,6 +12,7 @@ export const KEYS = {
   referrals: 'referrals',
   earnings: 'earnings',
   users: 'users',
+  boostLeaderboard: 'boost:leaderboard',  // YENİ EKLE
 };
 
 // ==================== SLIDING WINDOW RATE LIMITER ====================
