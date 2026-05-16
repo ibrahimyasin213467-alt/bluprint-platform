@@ -2,24 +2,19 @@
 
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import {
-  createCreateMetadataAccountV3Instruction,
-  PROGRAM_ID as METADATA_PROGRAM_ID,
-} from "@metaplex-foundation/mpl-token-metadata";
+  ExtensionType,
+  getMintLen,
+  TOKEN_2022_PROGRAM_ID,
+  createInitializeMetadataPointerInstruction,
+  createInitializeInstruction,
+} from "@solana/spl-token";
+import { pack, TokenMetadata } from "@solana/spl-token-metadata";
 import { motion } from "framer-motion";
 import { useToast } from "./ToastProvider";
 
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
-
-function findMetadataPda(mint: PublicKey): PublicKey {
-  const seeds = [
-    Buffer.from("metadata"),
-    METADATA_PROGRAM_ID.toBuffer(),
-    mint.toBuffer(),
-  ];
-  return PublicKey.findProgramAddressSync(seeds, METADATA_PROGRAM_ID)[0];
-}
 
 export default function SuccessModal({
   successData,
@@ -48,55 +43,71 @@ export default function SuccessModal({
     setAddingMetadata(true);
     try {
       const connection = new Connection(RPC_URL, "confirmed");
-      const mint = new PublicKey(mintAddress);
-      const metadataPDA = findMetadataPda(mint);
+      const mintPubkey = new PublicKey(mintAddress);
 
-      // IPFS'e metadata yükle
-      const metadataRes = await fetch("/api/upload-metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: successData.metadataName || successData.name,
-          symbol: successData.metadataSymbol || successData.symbol,
-          description: successData.description || "Launched on BluPrint Platform",
-          image: successData.tokenImage || successData.image || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
-          external_url: successData.website || "https://bluprint.fun",
-          twitter: successData.twitter || "",
-          telegram: successData.telegram || "",
-        }),
-      });
+      // 1. Metadata nesnesi
+      const tokenMetadata: TokenMetadata = {
+        mint: mintPubkey,
+        name: successData.name,
+        symbol: successData.symbol,
+        uri: `https://bluprint.fun/api/metadata/${mintAddress}`,
+        additionalMetadata: [
+          ["description", successData.description || "Launched on BluPrint Platform"],
+          ["twitter", successData.twitter || ""],
+          ["telegram", successData.telegram || ""],
+          ["website", successData.website || ""],
+          ["image", successData.tokenImage || ""],
+        ],
+      };
 
-      const metadataData = await metadataRes.json();
-      if (!metadataData.success) throw new Error("IPFS upload failed: " + (metadataData.error || "Unknown"));
+      // 2. Gerekli alan boyutunu hesapla
+      const metadataExtensionSize = pack(tokenMetadata).length;
+      const mintWithPointerSize = getMintLen([ExtensionType.MetadataPointer]);
+      const totalRequiredSpace = mintWithPointerSize + metadataExtensionSize;
 
-      // ========== METADATA INSTRUCTION - updateAuthority = null ==========
-      const instruction = createCreateMetadataAccountV3Instruction(
-        {
-          metadata: metadataPDA,
-          mint,
-          mintAuthority: publicKey,
-          payer: publicKey,
-          updateAuthority: publicKey,
+      // 3. Rent-exempt lamport miktarını hesapla
+      const requiredLamports = await connection.getMinimumBalanceForRentExemption(totalRequiredSpace);
 
-        },
-        {
-          createMetadataAccountArgsV3: {
-            data: {
-              name: successData.metadataName || successData.name,
-              symbol: (successData.metadataSymbol || successData.symbol).toUpperCase(),
-              uri: metadataData.uri,
-              sellerFeeBasisPoints: 0,
-              creators: null,
-              collection: null,
-              uses: null,
-            },
-            isMutable: false,
-            collectionDetails: null,
-          },
-        }
+      // 4. Mint hesabının mevcut durumunu kontrol et
+      const mintAccountInfo = await connection.getAccountInfo(mintPubkey);
+      const currentBalance = mintAccountInfo?.lamports || 0;
+
+      const transaction = new Transaction();
+
+      // 5. Eğer bakiye yetersizse, lamport ekle
+      if (currentBalance < requiredLamports) {
+        const transferIx = SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: mintPubkey,
+          lamports: requiredLamports - currentBalance,
+        });
+        transaction.add(transferIx);
+      }
+
+      // 6. Metadata Pointer Extension'ı başlat
+      transaction.add(
+        createInitializeMetadataPointerInstruction(
+          mintPubkey,
+          publicKey,
+          mintPubkey,
+          TOKEN_2022_PROGRAM_ID
+        )
       );
 
-      const transaction = new Transaction().add(instruction);
+      // 7. Metadata'yı mint hesabına yaz
+      transaction.add(
+        createInitializeInstruction({
+          programId: TOKEN_2022_PROGRAM_ID,
+          mint: mintPubkey,
+          metadata: mintPubkey,
+          name: tokenMetadata.name,
+          symbol: tokenMetadata.symbol,
+          uri: tokenMetadata.uri,
+          mintAuthority: publicKey,
+          updateAuthority: publicKey,
+        })
+      );
+
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
@@ -109,16 +120,10 @@ export default function SuccessModal({
       await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
       setMetadataAdded(true);
-      showToast("✨ Metadata added successfully! Your token now has a name and logo on Solscan.", "success");
+      showToast("✨ Metadata added! Your token now has a name and logo on Solscan.", "success");
     } catch (err: any) {
       console.error("Metadata error:", err);
-      let errorMsg = err.message || "Unknown error";
-      if (errorMsg.includes("Custom program error: 0x0")) {
-        errorMsg = "Metadata already exists for this token.";
-      } else if (errorMsg.includes("0x10")) {
-        errorMsg = "Authority error. Please try again.";
-      }
-      showToast(`❌ Failed to add metadata: ${errorMsg}`, "error");
+      showToast(`❌ Failed to add metadata: ${err.message}`, "error");
     } finally {
       setAddingMetadata(false);
     }
