@@ -8,37 +8,68 @@ export async function GET(req: NextRequest) {
     let url = '';
     
     if (filter === 'trending') {
-      url = 'https://api.dexscreener.com/latest/dex/tokens/trending?chain=solana';
+      url = 'https://api.dexscreener.com/latest/dex/tokens/trending';
     } else if (filter === 'volume') {
       url = 'https://api.dexscreener.com/latest/dex/search?q=Solana&sort=volume&order=desc';
     } else {
       url = 'https://api.dexscreener.com/latest/dex/search?q=Solana';
     }
     
+    console.log('Fetching DexScreener:', url);
+    
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
         'Accept': 'application/json',
       },
+      next: { revalidate: 30 }
     });
     
     const data = await response.json();
     
-    // Formatla
     let tokens = [];
-    if (data.pairs && Array.isArray(data.pairs)) {
-      tokens = data.pairs.slice(0, 30).map((pair: any) => ({
-        mint: pair.baseToken?.address || pair.pairAddress,
-        name: pair.baseToken?.name || "Unknown",
-        symbol: pair.baseToken?.symbol || "???",
-        image: pair.info?.image || "",
-        volume24h: pair.volume?.h24 || 0,
-        liquidity: pair.liquidity?.usd || 0,
-        priceChange24h: pair.priceChange?.h24 || 0,
-        pairAddress: pair.pairAddress,
-        dexUrl: pair.url || `https://dexscreener.com/solana/${pair.pairAddress}`,
-      }));
+    
+    if (filter === 'trending') {
+      // Trending endpoint farklı yapıda
+      if (data.tokens && Array.isArray(data.tokens)) {
+        tokens = data.tokens
+          .filter((token: any) => token.chainId === 'solana')
+          .slice(0, 50)
+          .map((token: any) => ({
+            mint: token.address,
+            name: token.name || "Unknown",
+            symbol: token.symbol || "???",
+            image: token.logoURI || "",
+            volume24h: token.volume?.h24 || 0,
+            liquidity: token.liquidity?.usd || 0,
+            priceChange24h: token.priceChange?.h24 || 0,
+            pairAddress: token.pairAddress,
+            dexUrl: `https://dexscreener.com/solana/${token.pairAddress}`,
+            dex: token.dexId || "DexScreener",
+          }));
+      }
+    } else {
+      // Search endpoint
+      if (data.pairs && Array.isArray(data.pairs)) {
+        tokens = data.pairs
+          .filter((pair: any) => pair.chainId === 'solana')
+          .slice(0, 50)
+          .map((pair: any) => ({
+            mint: pair.baseToken?.address || pair.pairAddress,
+            name: pair.baseToken?.name || "Unknown",
+            symbol: pair.baseToken?.symbol || "???",
+            image: pair.baseToken?.logoURI || "",
+            volume24h: pair.volume?.h24 || 0,
+            liquidity: pair.liquidity?.usd || 0,
+            priceChange24h: pair.priceChange?.h24 || 0,
+            pairAddress: pair.pairAddress,
+            dexUrl: pair.url || `https://dexscreener.com/solana/${pair.pairAddress}`,
+            dex: pair.dexId || "DexScreener",
+          }));
+      }
     }
+    
+    console.log(`Found ${tokens.length} Solana tokens`);
     
     return NextResponse.json({
       success: true,
@@ -49,11 +80,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ 
       success: false, 
       error: error.message,
-      tokens: [
-        { mint: "1", name: "Bonk", symbol: "BONK", volume24h: 1500000, liquidity: 500000, priceChange24h: 15.5 },
-        { mint: "2", name: "DogWifHat", symbol: "WIF", volume24h: 2800000, liquidity: 1200000, priceChange24h: -5.2 },
-        { mint: "3", name: "Popcat", symbol: "POPCAT", volume24h: 890000, liquidity: 320000, priceChange24h: 42.8 },
-      ]
+      tokens: []
     }, { status: 200 });
   }
 }

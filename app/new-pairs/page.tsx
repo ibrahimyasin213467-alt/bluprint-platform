@@ -13,7 +13,6 @@ interface Token {
   volume24h?: number;
   liquidity?: number;
   priceChange24h?: number;
-  txns24h?: number;
   pairAddress?: string;
   dexUrl?: string;
   dex?: string;
@@ -25,6 +24,7 @@ export default function NewPairsPage() {
   const [marketTokens, setMarketTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"trending" | "volume" | "new">("trending");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === "bluprint") {
@@ -36,6 +36,7 @@ export default function NewPairsPage() {
 
   const fetchBluprintTokens = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/tokens?limit=50");
       const data = await res.json();
@@ -49,6 +50,7 @@ export default function NewPairsPage() {
       }
     } catch (err) {
       console.error(err);
+      setError("Failed to load BluPrint tokens");
     } finally {
       setLoading(false);
     }
@@ -56,17 +58,20 @@ export default function NewPairsPage() {
 
   const fetchMarketTokens = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/dex-screener?filter=${filter}`);
       const data = await res.json();
-      if (data.success && data.tokens) {
+      if (data.success && data.tokens && data.tokens.length > 0) {
         setMarketTokens(data.tokens.slice(0, 50));
       } else {
         setMarketTokens([]);
+        setError("No tokens found from DexScreener");
       }
     } catch (err) {
       console.error(err);
       setMarketTokens([]);
+      setError("Failed to load DexScreener data");
     } finally {
       setLoading(false);
     }
@@ -107,11 +112,9 @@ export default function NewPairsPage() {
             {token.image ? (
               <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
             ) : isBluprint ? (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-xs">
-                B
-              </div>
+              <img src="/favicon.ico" alt="BluPrint" className="w-6 h-6" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center text-xs">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center text-xs font-bold">
                 D
               </div>
             )}
@@ -122,27 +125,17 @@ export default function NewPairsPage() {
           </div>
         </div>
         
-        {/* Dex / Platform */}
-        <div className="w-24">
-          {!isBluprint && token.dex && (
+        {/* Source */}
+        <div className="w-28">
+          {!isBluprint && (
             <div className="flex items-center gap-1">
-              {token.dex === "DexScreener" && (
-                <span className="text-xs text-orange-400">DexScreener</span>
-              )}
-              {token.dex === "Raydium" && (
-                <span className="text-xs text-blue-400">Raydium</span>
-              )}
-              {token.dex === "PumpSwap" && (
-                <span className="text-xs text-purple-400">PumpSwap</span>
-              )}
-              {!token.dex && <span className="text-xs text-gray-500">DEX</span>}
+              <span className="text-xs">🌍</span>
+              <span className="text-xs text-orange-400">DexScreener</span>
             </div>
           )}
           {isBluprint && (
             <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-                <span className="text-[8px] text-white">B</span>
-              </div>
+              <img src="/favicon.ico" alt="BluPrint" className="w-4 h-4" />
               <span className="text-xs text-blue-400">BluPrint</span>
             </div>
           )}
@@ -150,20 +143,20 @@ export default function NewPairsPage() {
         
         {/* Liquidity */}
         <div className="flex-1 text-right">
-          <div className="text-sm text-white">{token.liquidity ? formatNumber(token.liquidity) : "—"}</div>
-          <div className="text-xs text-gray-600">Liq</div>
+          <div className="text-sm text-white">{token.liquidity ? `$${formatNumber(token.liquidity)}` : "—"}</div>
+          <div className="text-xs text-gray-600">Liquidity</div>
         </div>
         
         {/* Volume 24h */}
-        <div className="w-28 text-right">
-          <div className="text-sm text-white">{formatNumber(token.volume24h)}</div>
-          <div className="text-xs text-gray-600">Vol 24h</div>
+        <div className="w-32 text-right">
+          <div className="text-sm text-white">{token.volume24h ? `$${formatNumber(token.volume24h)}` : "—"}</div>
+          <div className="text-xs text-gray-600">Volume 24h</div>
         </div>
         
         {/* Price Change */}
         <div className="w-24 text-right">
           {formatPriceChange(token.priceChange24h)}
-          <div className="text-xs text-gray-600">24h</div>
+          <div className="text-xs text-gray-600">24h %</div>
         </div>
         
         {/* Action */}
@@ -183,10 +176,22 @@ export default function NewPairsPage() {
         
         <div className="relative z-10 pt-20 sm:pt-24 max-w-7xl mx-auto px-4 pb-16">
           
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-white">New Pairs</h1>
-            <p className="text-gray-500 text-sm mt-1">Discover the latest tokens on Solana</p>
+          {/* Header with logos */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-white">New Pairs</h1>
+              <p className="text-gray-500 text-sm mt-1">Discover the latest tokens on Solana</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <img src="/favicon.ico" alt="BluPrint" className="w-6 h-6" />
+                <span className="text-xs text-gray-500">BluPrint Origin</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🌍</span>
+                <span className="text-xs text-gray-500">DexScreener</span>
+              </div>
+            </div>
           </div>
 
           {/* Tabs - Market sekmesi başta */}
@@ -240,10 +245,10 @@ export default function NewPairsPage() {
           <div className="hidden md:flex items-center gap-3 px-4 py-2 text-xs text-gray-500 border-b border-gray-800">
             <div className="w-10">#</div>
             <div className="w-56">Token</div>
-            <div className="w-24">Source</div>
+            <div className="w-28">Source</div>
             <div className="flex-1 text-right">Liquidity</div>
-            <div className="w-28 text-right">Volume 24h</div>
-            <div className="w-24 text-right">Price 24h</div>
+            <div className="w-32 text-right">Volume 24h</div>
+            <div className="w-24 text-right">24h %</div>
             <div className="w-12"></div>
           </div>
 
@@ -254,8 +259,21 @@ export default function NewPairsPage() {
             </div>
           )}
 
+          {/* Error */}
+          {error && !loading && (
+            <div className="text-center py-20 text-yellow-500">
+              <p>{error}</p>
+              <button 
+                onClick={() => activeTab === "bluprint" ? fetchBluprintTokens() : fetchMarketTokens()}
+                className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Token List */}
-          {!loading && (
+          {!loading && !error && (
             <div className="divide-y divide-gray-800/50">
               {activeTab === "market" && marketTokens.length > 0 ? (
                 marketTokens.map((token, idx) => (
