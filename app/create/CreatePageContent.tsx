@@ -9,15 +9,19 @@ import {
   LAMPORTS_PER_SOL, PublicKey,
 } from "@solana/web3.js";
 import {
+  ExtensionType,
+  getMintLen,
+  TOKEN_2022_PROGRAM_ID,
   createInitializeMintInstruction,
-  getMinimumBalanceForRentExemptMint,
-  MINT_SIZE, TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddress,
+  createInitializeMetadataPointerInstruction,
+  createInitializeInstruction,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   createSetAuthorityInstruction,
   AuthorityType,
+  getAssociatedTokenAddress,
 } from "@solana/spl-token";
+import { pack, TokenMetadata } from "@solana/spl-token-metadata";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
@@ -150,6 +154,50 @@ export default function CreatePageContent() {
     }
   };
 
+  const uploadMetadataToIPFS = async (): Promise<string | null> => {
+    const pinataJwt = process.env.NEXT_PUBLIC_PINATA_JWT;
+    if (!pinataJwt) {
+      console.warn("No Pinata JWT found");
+      return null;
+    }
+    
+    const metadata = {
+      name: tokenName,
+      symbol: tokenSymbol.toUpperCase(),
+      description: description || "Launched on BluPrint Platform (Token-2022)",
+      image: tokenImage || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
+      external_url: website || "https://bluprint.fun",
+      attributes: [
+        { trait_type: "Platform", value: "BluPrint" },
+        { trait_type: "Type", value: "Meme Coin" },
+        { trait_type: "Standard", value: "Token-2022" },
+        { trait_type: "Twitter", value: twitter || "" },
+        { trait_type: "Telegram", value: telegram || "" },
+      ],
+    };
+    
+    try {
+      const res = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${pinataJwt}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          pinataContent: metadata, 
+          pinataMetadata: { name: `metadata-${tokenName}-${Date.now()}` } 
+        }),
+      });
+      const data = await res.json();
+      if (!data.IpfsHash) throw new Error("IPFS upload failed");
+      console.log("✅ IPFS URI:", data.IpfsHash);
+      return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
+    } catch (err) {
+      console.error("IPFS upload error:", err);
+      return null;
+    }
+  };
+
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
     if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
@@ -172,7 +220,7 @@ export default function CreatePageContent() {
       return;
     }
 
-    // LocalStorage rate limit (1 dakikada 1 token)
+    // LocalStorage rate limit
     const lastCreate = localStorage.getItem('bluprint_last_create');
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
       const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
@@ -215,42 +263,100 @@ export default function CreatePageContent() {
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      // Mint keypair oluştur
-      setStep("🔑 Creating mint account...");
-      const mintKeypair = Keypair.generate();
-      const lamports = await getMinimumBalanceForRentExemptMint(connection);
+      // IPFS Metadata yükle
+      setStep("📤 Uploading metadata to IPFS...");
+      const metadataUri = await uploadMetadataToIPFS();
       
-      // ATA oluştur
+      // Mint keypair oluştur (Token-2022 için)
+      setStep("🔑 Creating mint account (Token-2022)...");
+      const mintKeypair = Keypair.generate();
+      
+      // Token-2022 için gerekli alan boyutu (metadata extension ile)
+      const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+      const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+      
+      // ATA oluştur (Token-2022 için)
       setStep("📝 Creating token account...");
-      const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
+      const ata = await getAssociatedTokenAddress(
+        mintKeypair.publicKey,
+        publicKey,
+        false,
+        TOKEN_2022_PROGRAM_ID
+      );
       
       // Supply hesapla
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
+      // Token Metadata nesnesi
+      const tokenMetadata: TokenMetadata = {
+        mint: mintKeypair.publicKey,
+        name: tokenName,
+        symbol: tokenSymbol.toUpperCase(),
+        uri: metadataUri || "",
+        additionalMetadata: [
+          ["description", description || "Launched on BluPrint Platform"],
+          ["twitter", twitter || ""],
+          ["telegram", telegram || ""],
+          ["website", website || ""],
+        ],
+      };
+      
       // Transaction oluştur
-      setStep("📦 Building transaction...");
+      setStep("📦 Building transaction (Token-2022 with metadata)...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // 1. Mint account oluştur
+      // 1. Mint account oluştur (Token-2022 programı ile)
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
           newAccountPubkey: mintKeypair.publicKey,
-          space: MINT_SIZE,
+          space: mintLen,
           lamports,
-          programId: TOKEN_PROGRAM_ID,
+          programId: TOKEN_2022_PROGRAM_ID,
         })
       );
 
-      // 2. Mint'i başlat
+      // 2. Metadata Pointer Extension'ı başlat
       transaction.add(
-        createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null)
+        createInitializeMetadataPointerInstruction(
+          mintKeypair.publicKey,
+          publicKey,
+          mintKeypair.publicKey,
+          TOKEN_2022_PROGRAM_ID
+        )
       );
 
-      // 3. Fee transferleri
+      // 3. Mint'i başlat (Token-2022)
+      transaction.add(
+        createInitializeMintInstruction(
+          mintKeypair.publicKey,
+          tokenDecimals,
+          publicKey,
+          secureToken ? publicKey : null,
+          TOKEN_2022_PROGRAM_ID
+        )
+      );
+
+      // 4. Metadata'yı mint hesabına yaz (TEK INSTRUCTION!)
+      if (metadataUri) {
+        transaction.add(
+          createInitializeInstruction({
+            programId: TOKEN_2022_PROGRAM_ID,
+            mint: mintKeypair.publicKey,
+            metadata: mintKeypair.publicKey,
+            name: tokenMetadata.name,
+            symbol: tokenMetadata.symbol,
+            uri: tokenMetadata.uri,
+            mintAuthority: publicKey,
+            updateAuthority: publicKey,
+          })
+        );
+      }
+
+      // 5. Fee transferleri
       transaction.add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare })
       );
@@ -261,17 +367,30 @@ export default function CreatePageContent() {
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare })
       );
 
-      // 4. ATA oluştur
+      // 6. ATA oluştur (Token-2022)
       transaction.add(
-        createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey)
+        createAssociatedTokenAccountInstruction(
+          publicKey,
+          ata,
+          publicKey,
+          mintKeypair.publicKey,
+          TOKEN_2022_PROGRAM_ID
+        )
       );
 
-      // 5. Token mintle
+      // 7. Token mintle
       transaction.add(
-        createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
+        createMintToInstruction(
+          mintKeypair.publicKey,
+          ata,
+          publicKey,
+          supply,
+          [],
+          TOKEN_2022_PROGRAM_ID
+        )
       );
 
-      // 6. Referral transfer
+      // 8. Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -282,16 +401,30 @@ export default function CreatePageContent() {
         );
       }
 
-      // 7. 1. ve 2. Revoke (Mint ve Freeze)
+      // 9. Revoke'lar (Mint ve Freeze)
       if (secureToken) {
         if (revokeMint) {
           transaction.add(
-            createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null)
+            createSetAuthorityInstruction(
+              mintKeypair.publicKey,
+              publicKey,
+              AuthorityType.MintTokens,
+              null,
+              [],
+              TOKEN_2022_PROGRAM_ID
+            )
           );
         }
         if (revokeFreeze) {
           transaction.add(
-            createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.FreezeAccount, null)
+            createSetAuthorityInstruction(
+              mintKeypair.publicKey,
+              publicKey,
+              AuthorityType.FreezeAccount,
+              null,
+              [],
+              TOKEN_2022_PROGRAM_ID
+            )
           );
         }
       }
@@ -314,7 +447,7 @@ export default function CreatePageContent() {
       // Success ekranı
       clearInterval(progressInterval.current!);
       setProgress(100);
-      setStep("✅ Done! Your token is ready!");
+      setStep("✅ Done! Your Token-2022 is ready!");
 
       setTime((Date.now() - start) / 1000);
       const newMintAddress = mintKeypair.publicKey.toBase58();
@@ -338,11 +471,8 @@ export default function CreatePageContent() {
         website,
         tokenImage,
         description,
-        // Metadata için gerekli bilgiler
-        metadataName: tokenName,
-        metadataSymbol: tokenSymbol,
-        metadataUri: null, // Sonra eklenecek
-        metadataAdded: false,
+        metadataAdded: !!metadataUri,
+        isToken2022: true,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
@@ -363,6 +493,7 @@ export default function CreatePageContent() {
             twitter,
             telegram,
             website,
+            isToken2022: true,
           }),
         });
         console.log("✅ Token saved to Redis");
@@ -370,10 +501,8 @@ export default function CreatePageContent() {
         console.error("Failed to save token to Redis:", err);
       }
       
-      // Rate limit kaydet
       localStorage.setItem('bluprint_last_create', Date.now().toString());
       
-      // Promo code'u yeniden al
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
@@ -447,7 +576,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.05 SOL</span>
+                <span className="font-bold">0.05 SOL (Token-2022)</span>
               </div>
             </motion.div>
           )}
@@ -466,7 +595,7 @@ export default function CreatePageContent() {
               animate={{ opacity: 1 }}
               className="text-gray-400 mt-3 text-sm sm:text-base"
             >
-              {t("create_subtitle")}
+              {t("create_subtitle")} <span className="text-green-400">(Token-2022)</span>
             </motion.p>
           </div>
 
