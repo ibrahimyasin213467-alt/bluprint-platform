@@ -4,13 +4,17 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import {
-  createUpdateMetadataAccountV2Instruction,
-  PROGRAM_ID as METADATA_PROGRAM_ID,
-} from "@metaplex-foundation/mpl-token-metadata";
+  ExtensionType,
+  getMintLen,
+  TOKEN_2022_PROGRAM_ID,
+  createInitializeMetadataPointerInstruction,
+  createInitializeInstruction,
+} from "@solana/spl-token";
+import { pack, TokenMetadata } from "@solana/spl-token-metadata";
 import { motion } from "framer-motion";
 import { useToast } from "./ToastProvider";
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=fdbb8762-06b5-4bbd-ab1e-33310587e2d4";
 
 export default function SuccessModal({
   successData,
@@ -28,7 +32,7 @@ export default function SuccessModal({
   const { publicKey, sendTransaction, connected } = useWallet();
   const { showToast } = useToast();
   const [addingMetadata, setAddingMetadata] = useState(false);
-  const [metadataAdded, setMetadataAdded] = useState(successData.metadataAdded || false);
+  const [metadataAdded, setMetadataAdded] = useState(false);
 
   const addMetadata = async () => {
     if (!publicKey || !connected) {
@@ -59,40 +63,55 @@ export default function SuccessModal({
       const metadataData = await metadataRes.json();
       if (!metadataData.success) throw new Error("IPFS upload failed: " + (metadataData.error || "Unknown"));
 
-      // 2. Metadata PDA'sını bul
-      const [metadataPDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-        METADATA_PROGRAM_ID
-      );
+      // 2. Token Metadata nesnesi
+      const tokenMetadata: TokenMetadata = {
+        mint,
+        name: successData.name,
+        symbol: successData.symbol.toUpperCase(),
+        uri: metadataData.uri,
+        additionalMetadata: [
+          ["description", successData.description || "Launched on BluPrint Platform"],
+          ["twitter", successData.twitter || ""],
+          ["telegram", successData.telegram || ""],
+          ["website", successData.website || ""],
+        ],
+      };
 
-      // 3. Update instruction'ı oluştur
-      const instruction = createUpdateMetadataAccountV2Instruction(
-        {
-          metadata: metadataPDA,
-          updateAuthority: mint,
-        },
-        {
-          updateMetadataAccountArgsV2: {
-            data: {
-              name: successData.name,
-              symbol: successData.symbol.toUpperCase(),
-              uri: metadataData.uri,
-              sellerFeeBasisPoints: 0,
-              creators: null,
-              collection: null,
-              uses: null,
-            },
-            updateAuthority: null,
-            primarySaleHappened: null,
-            isMutable: false,
-          },
-        }
-      );
+      // 3. Mint hesabını kontrol et
+      const mintAccountInfo = await connection.getAccountInfo(mint);
+      if (!mintAccountInfo) {
+        throw new Error("Mint account not found");
+      }
 
-      const transaction = new Transaction().add(instruction);
+      // 4. Transaction oluştur
+      const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
+
+      // Metadata Pointer Extension
+      transaction.add(
+        createInitializeMetadataPointerInstruction(
+          mint,
+          publicKey,
+          mint,
+          TOKEN_2022_PROGRAM_ID
+        )
+      );
+
+      // Metadata'yı yaz
+      transaction.add(
+        createInitializeInstruction({
+          programId: TOKEN_2022_PROGRAM_ID,
+          mint,
+          metadata: mint,
+          name: tokenMetadata.name,
+          symbol: tokenMetadata.symbol,
+          uri: tokenMetadata.uri,
+          mintAuthority: publicKey,
+          updateAuthority: publicKey,
+        })
+      );
 
       const signature = await sendTransaction(transaction, connection, {
         skipPreflight: true,
@@ -105,11 +124,7 @@ export default function SuccessModal({
       showToast("✨ Metadata added! Your token now has a name and logo on Solscan.", "success");
     } catch (err: any) {
       console.error("Metadata error:", err);
-      let errorMsg = err.message || "Unknown error";
-      if (errorMsg.includes("0x0")) {
-        errorMsg = "Metadata already exists for this token.";
-      }
-      showToast(`❌ Failed to add metadata: ${errorMsg}`, "error");
+      showToast(`❌ Failed to add metadata: ${err.message}`, "error");
     } finally {
       setAddingMetadata(false);
     }
@@ -179,7 +194,6 @@ export default function SuccessModal({
           </button>
         )}
 
-        {/* METADATA EKLENDİ MESAJI */}
         {metadataAdded && (
           <div className="text-center text-green-400 text-sm mb-3">
             ✅ Metadata added! Your token now has a name and logo on Solscan.
@@ -188,17 +202,13 @@ export default function SuccessModal({
 
         <div className="flex gap-3">
           <button
-            onClick={() => {
-              window.open(`https://solscan.io/token/${mintAddress}`, "_blank");
-            }}
+            onClick={() => window.open(`https://solscan.io/token/${mintAddress}`, "_blank")}
             className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded-xl transition text-sm"
           >
             🔍 View on Solscan
           </button>
           <button
-            onClick={() => {
-              window.open(`https://twitter.com/intent/tweet?text=I just created a token on BluPrint! 🚀%0aName: ${successData.name} ($${successData.symbol})%0aMint: ${mintAddress}%0aCreate yours at https://bluprint.fun`, "_blank");
-            }}
+            onClick={() => window.open(`https://twitter.com/intent/tweet?text=I just created a token on BluPrint! 🚀%0aName: ${successData.name} ($${successData.symbol})%0aMint: ${mintAddress}%0aCreate yours at https://bluprint.fun`, "_blank")}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl transition text-sm"
           >
             🐦 Share on Twitter
@@ -206,16 +216,10 @@ export default function SuccessModal({
         </div>
 
         <div className="flex gap-3 mt-3">
-          <button
-            onClick={onReset}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-xl transition text-sm"
-          >
+          <button onClick={onReset} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-xl transition text-sm">
             ✨ Create Another
           </button>
-          <button
-            onClick={onHome}
-            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-xl transition text-sm"
-          >
+          <button onClick={onHome} className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-xl transition text-sm">
             🏠 Home
           </button>
         </div>
