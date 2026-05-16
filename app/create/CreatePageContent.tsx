@@ -220,7 +220,7 @@ export default function CreatePageContent() {
       return;
     }
 
-    // LocalStorage rate limit
+    // LocalStorage rate limit (1 dakikada 1 token)
     const lastCreate = localStorage.getItem('bluprint_last_create');
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
       const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
@@ -267,27 +267,11 @@ export default function CreatePageContent() {
       setStep("📤 Uploading metadata to IPFS...");
       const metadataUri = await uploadMetadataToIPFS();
       
-      // Mint keypair oluştur (Token-2022 için)
+      // Mint keypair oluştur (Token-2022)
       setStep("🔑 Creating mint account (Token-2022)...");
       const mintKeypair = Keypair.generate();
       
-      // Token-2022 için gerekli alan boyutu (metadata extension ile)
-      const mintLen = getMintLen([ExtensionType.MetadataPointer]);
-      const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
-      
-      // ATA oluştur (Token-2022 için)
-      setStep("📝 Creating token account...");
-      const ata = await getAssociatedTokenAddress(
-        mintKeypair.publicKey,
-        publicKey,
-        false,
-        TOKEN_2022_PROGRAM_ID
-      );
-      
-      // Supply hesapla
-      const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
-      
-      // Token Metadata nesnesi
+      // Token Metadata nesnesi (boyut hesaplama için)
       const tokenMetadata: TokenMetadata = {
         mint: mintKeypair.publicKey,
         name: tokenName,
@@ -301,6 +285,24 @@ export default function CreatePageContent() {
         ],
       };
       
+      // DOĞRU BOYUT HESABI (mint + metadata gövdesi)
+      const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+      const metadataLen = pack(tokenMetadata).length;
+      const totalLen = mintLen + metadataLen;
+      const lamports = await connection.getMinimumBalanceForRentExemption(totalLen);
+      
+      // ATA adresi (Token-2022 için)
+      setStep("📝 Creating token account...");
+      const ata = await getAssociatedTokenAddress(
+        mintKeypair.publicKey,
+        publicKey,
+        false,
+        TOKEN_2022_PROGRAM_ID
+      );
+      
+      // Supply hesapla
+      const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
+      
       // Transaction oluştur
       setStep("📦 Building transaction (Token-2022 with metadata)...");
       const transaction = new Transaction();
@@ -308,12 +310,12 @@ export default function CreatePageContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // 1. Mint account oluştur (Token-2022 programı ile)
+      // 1. Mint account oluştur (Token-2022)
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
           newAccountPubkey: mintKeypair.publicKey,
-          space: mintLen,
+          space: totalLen,
           lamports,
           programId: TOKEN_2022_PROGRAM_ID,
         })
@@ -340,7 +342,7 @@ export default function CreatePageContent() {
         )
       );
 
-      // 4. Metadata'yı mint hesabına yaz (TEK INSTRUCTION!)
+      // 4. Metadata'yı mint hesabına yaz
       if (metadataUri) {
         transaction.add(
           createInitializeInstruction({
@@ -514,7 +516,7 @@ export default function CreatePageContent() {
       
       let errorMessage = err.message || "Unknown error";
       if (err.message?.includes("insufficient")) {
-        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
+        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL + rent.";
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       }
@@ -576,7 +578,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.05 SOL (Token-2022)</span>
+                <span className="font-bold">0.05 SOL</span>
               </div>
             </motion.div>
           )}
