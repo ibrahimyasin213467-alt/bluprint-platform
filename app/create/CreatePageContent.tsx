@@ -9,15 +9,22 @@ import {
   LAMPORTS_PER_SOL, PublicKey,
 } from "@solana/web3.js";
 import {
+  ExtensionType,
   getMintLen,
   TOKEN_2022_PROGRAM_ID,
   createInitializeMintInstruction,
+  createInitializeMetadataPointerInstruction,
+  createInitializeInstruction as createInitializeTokenMetadataInstruction,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   createSetAuthorityInstruction,
   AuthorityType,
-  getAssociatedTokenAddress,
+  getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
+import {
+  pack,
+  TokenMetadata,
+} from "@solana/spl-token-metadata";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
@@ -55,6 +62,7 @@ export default function CreatePageContent() {
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [referrerWallet, setReferrerWallet] = useState<string | null>(null);
 
+  // Form state
   const [tokenName, setTokenName] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
   const [tokenSupply, setTokenSupply] = useState(1_000_000_000);
@@ -87,27 +95,45 @@ export default function CreatePageContent() {
   }, []);
 
   useEffect(() => {
-    if (publicKey) {
-      fetch(`/api/promo?wallet=${publicKey.toString()}`)
-        .then((r) => r.json())
-        .then((d) => { if (d.success && d.promoCode) setMyPromoCode(d.promoCode); })
-        .catch(() => {});
-    }
+    const fetchMyPromoCode = async () => {
+      if (publicKey) {
+        try {
+          const res = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
+          const data = await res.json();
+          if (data.success && data.promoCode) {
+            setMyPromoCode(data.promoCode);
+          }
+        } catch (err) {
+          console.error("Failed to fetch promo code:", err);
+        }
+      }
+    };
+    fetchMyPromoCode();
   }, [publicKey]);
 
   useEffect(() => {
-    if (promoCodeInput.length !== 7) { setReferrerWallet(null); return; }
-    fetch(`/api/promo?code=${promoCodeInput}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.wallet && d.wallet !== publicKey?.toString()) {
-          setReferrerWallet(d.wallet);
-          showToast(`🎉 Promo code applied! You will save 0.02 SOL`, "success");
-        } else {
+    const fetchReferrerByPromoCode = async () => {
+      if (promoCodeInput && promoCodeInput.length === 7) {
+        try {
+          const res = await fetch(`/api/promo?code=${promoCodeInput}`);
+          const data = await res.json();
+          if (data.success && data.wallet && data.wallet !== publicKey?.toString()) {
+            setReferrerWallet(data.wallet);
+            showToast(`🎉 Promo code applied! You will save 0.02 SOL`, "success");
+          } else {
+            setReferrerWallet(null);
+            if (promoCodeInput) {
+              showToast("Invalid promo code", "error");
+            }
+          }
+        } catch (err) {
           setReferrerWallet(null);
         }
-      })
-      .catch(() => setReferrerWallet(null));
+      } else {
+        setReferrerWallet(null);
+      }
+    };
+    fetchReferrerByPromoCode();
   }, [promoCodeInput]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,6 +157,50 @@ export default function CreatePageContent() {
     }
   };
 
+  const uploadMetadataToIPFS = async (): Promise<string | null> => {
+    const pinataJwt = process.env.NEXT_PUBLIC_PINATA_JWT;
+    if (!pinataJwt) {
+      console.warn("No Pinata JWT found");
+      return null;
+    }
+    
+    const metadata = {
+      name: tokenName,
+      symbol: tokenSymbol.toUpperCase(),
+      description: description || "Launched on BluPrint Platform (Token-2022)",
+      image: tokenImage || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
+      external_url: website || "https://bluprint.fun",
+      attributes: [
+        { trait_type: "Platform", value: "BluPrint" },
+        { trait_type: "Type", value: "Meme Coin" },
+        { trait_type: "Standard", value: "Token-2022" },
+        { trait_type: "Twitter", value: twitter || "" },
+        { trait_type: "Telegram", value: telegram || "" },
+      ],
+    };
+    
+    try {
+      const res = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${pinataJwt}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          pinataContent: metadata, 
+          pinataMetadata: { name: `metadata-${tokenName}-${Date.now()}` } 
+        }),
+      });
+      const data = await res.json();
+      if (!data.IpfsHash) throw new Error("IPFS upload failed");
+      console.log("✅ IPFS URI:", data.IpfsHash);
+      return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
+    } catch (err) {
+      console.error("IPFS upload error:", err);
+      return null;
+    }
+  };
+
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
     if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
@@ -142,7 +212,10 @@ export default function CreatePageContent() {
 
   const createToken = async () => {
     if (isProcessing || loading) return;
-    if (!publicKey) { setVisible(true); return; }
+    if (!publicKey) {
+      setVisible(true);
+      return;
+    }
 
     const validationError = validateInputs();
     if (validationError) {
@@ -177,7 +250,7 @@ export default function CreatePageContent() {
     try {
       const connection = new Connection(RPC_URL, "confirmed");
       
-      // Referral
+      // Referral sistemi
       let finalReferrer: string | null = null;
       if (urlReferrer && urlReferrer.length === 44 && urlReferrer !== publicKey.toString()) {
         finalReferrer = urlReferrer;
@@ -192,17 +265,39 @@ export default function CreatePageContent() {
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      // Mint keypair (Token-2022 - metadata'sız)
+      // IPFS Metadata yükle
+      setStep("📤 Uploading metadata to IPFS...");
+      const metadataUri = await uploadMetadataToIPFS();
+      
+      // Mint keypair
       setStep("🔑 Creating mint account (Token-2022)...");
       const mintKeypair = Keypair.generate();
       
-      // Sadece mint için gerekli alan (metadata yok)
-      const mintLen = getMintLen([]);
-      const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+      // Token Metadata nesnesi (boyut hesaplama için)
+      const tokenMetadata: TokenMetadata = {
+        mint: mintKeypair.publicKey,
+        name: tokenName,
+        symbol: tokenSymbol.toUpperCase(),
+        uri: metadataUri || "",
+        additionalMetadata: [
+          ["description", description || "Launched on BluPrint Platform"],
+          ["twitter", twitter || ""],
+          ["telegram", telegram || ""],
+          ["website", website || ""],
+        ],
+      };
       
-      // ATA
-      setStep("📝 Creating token account...");
-      const ata = await getAssociatedTokenAddress(
+      // KRİTİK: Doğru boyut hesaplaması
+      const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+      const metadataLen = pack(tokenMetadata).length;
+      const totalLen = mintLen + metadataLen;
+      const lamports = await connection.getMinimumBalanceForRentExemption(totalLen);
+      
+      console.log(`📦 Mint space: ${totalLen} bytes (mint: ${mintLen}, metadata: ${metadataLen})`);
+      
+      // ATA adresi (Token-2022 için)
+      setStep("📝 Preparing token account...");
+      const ata = getAssociatedTokenAddressSync(
         mintKeypair.publicKey,
         publicKey,
         false,
@@ -211,25 +306,37 @@ export default function CreatePageContent() {
       
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
-      // Transaction
+      // Transaction oluştur
       setStep("📦 Building transaction...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // 1. Mint account oluştur
+      // ========== INSTRUCTION'LAR SIRASIYLA (ÇOK ÖNEMLİ) ==========
+      
+      // 1. Mint account oluştur (Token-2022)
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
           newAccountPubkey: mintKeypair.publicKey,
-          space: mintLen,
+          space: totalLen,
           lamports,
           programId: TOKEN_2022_PROGRAM_ID,
         })
       );
 
-      // 2. Mint'i başlat
+      // 2. Metadata Pointer Extension'ı başlat
+      transaction.add(
+        createInitializeMetadataPointerInstruction(
+          mintKeypair.publicKey,
+          publicKey,
+          mintKeypair.publicKey,
+          TOKEN_2022_PROGRAM_ID
+        )
+      );
+
+      // 3. Mint'i başlat (Token-2022)
       transaction.add(
         createInitializeMintInstruction(
           mintKeypair.publicKey,
@@ -240,7 +347,23 @@ export default function CreatePageContent() {
         )
       );
 
-      // 3. Fee transferleri
+      // 4. Metadata'yı mint hesabına yaz
+      if (metadataUri) {
+        transaction.add(
+          createInitializeTokenMetadataInstruction({
+            programId: TOKEN_2022_PROGRAM_ID,
+            mint: mintKeypair.publicKey,
+            metadata: mintKeypair.publicKey,
+            name: tokenMetadata.name,
+            symbol: tokenMetadata.symbol,
+            uri: tokenMetadata.uri,
+            mintAuthority: publicKey,
+            updateAuthority: publicKey,
+          })
+        );
+      }
+
+      // 5. Fee transferleri
       transaction.add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare })
       );
@@ -251,7 +374,7 @@ export default function CreatePageContent() {
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare })
       );
 
-      // 4. ATA oluştur
+      // 6. ATA oluştur (Token-2022)
       transaction.add(
         createAssociatedTokenAccountInstruction(
           publicKey,
@@ -262,7 +385,7 @@ export default function CreatePageContent() {
         )
       );
 
-      // 5. Token mintle
+      // 7. Token mintle
       transaction.add(
         createMintToInstruction(
           mintKeypair.publicKey,
@@ -274,7 +397,7 @@ export default function CreatePageContent() {
         )
       );
 
-      // 6. Referral
+      // 8. Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -285,7 +408,7 @@ export default function CreatePageContent() {
         );
       }
 
-      // 7. Revoke'lar
+      // 9. Revoke'lar (Mint ve Freeze)
       if (secureToken) {
         if (revokeMint) {
           transaction.add(
@@ -329,7 +452,7 @@ export default function CreatePageContent() {
 
       clearInterval(progressInterval.current!);
       setProgress(100);
-      setStep("✅ Done! Your Token-2022 is ready!");
+      setStep("✅ Done! Your Token-2022 with metadata is ready!");
 
       setTime((Date.now() - start) / 1000);
       const newMintAddress = mintKeypair.publicKey.toBase58();
@@ -353,6 +476,7 @@ export default function CreatePageContent() {
         website,
         tokenImage,
         description,
+        metadataAdded: !!metadataUri,
         isToken2022: true,
       });
       setStatus("");
@@ -377,6 +501,7 @@ export default function CreatePageContent() {
             isToken2022: true,
           }),
         });
+        console.log("✅ Token saved to Redis");
       } catch (err) {
         console.error("Failed to save token to Redis:", err);
       }
@@ -394,7 +519,7 @@ export default function CreatePageContent() {
       
       let errorMessage = err.message || "Unknown error";
       if (err.message?.includes("insufficient")) {
-        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL + rent.";
+        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL + rent (~0.01 SOL).";
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       }
@@ -455,7 +580,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.05 SOL</span>
+                <span className="font-bold">0.05 SOL (Token-2022)</span>
               </div>
             </motion.div>
           )}
@@ -473,7 +598,7 @@ export default function CreatePageContent() {
               animate={{ opacity: 1 }}
               className="text-gray-400 mt-3 text-sm sm:text-base"
             >
-              {t("create_subtitle")} <span className="text-green-400">(Token-2022)</span>
+              {t("create_subtitle")} <span className="text-green-400">(Token-2022 with Metadata)</span>
             </motion.p>
           </div>
 
@@ -661,8 +786,8 @@ export default function CreatePageContent() {
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                       {t("create_deploying")}
                     </span>
