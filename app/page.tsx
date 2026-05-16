@@ -255,7 +255,7 @@ function HomeContent() {
 // Ana export - Suspense ile sarmalanmış
 export default function Home() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen text-gray-500">Loading...</div>}>
       <HomeContent />
     </Suspense>
   );
