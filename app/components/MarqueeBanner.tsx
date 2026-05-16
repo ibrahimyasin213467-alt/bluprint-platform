@@ -1,89 +1,87 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 
-interface BoostToken {
-  id: string;
+interface BoostedToken {
   mint: string;
-  name: string;
   symbol: string;
+  name: string;
   image?: string;
   boostCount: number;
+  expiresAt: number;
 }
 
 export default function MarqueeBanner() {
-  const [boostTokens, setBoostTokens] = useState<BoostToken[]>([]);
+  const [tokens, setTokens] = useState<BoostedToken[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchBoostTokens();
-    const interval = setInterval(fetchBoostTokens, 30000);
-    window.addEventListener('boost-updated', fetchBoostTokens);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('boost-updated', fetchBoostTokens);
-    };
+    fetchActiveBoosts();
+    const interval = setInterval(fetchActiveBoosts, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchBoostTokens = async () => {
+  const fetchActiveBoosts = async () => {
     try {
-      const res = await fetch("/api/boost/tokens");
+      const res = await fetch('/api/boost/active');
       const data = await res.json();
-      if (data.success && data.tokens.length > 0) {
-        setBoostTokens(data.tokens);
-      } else {
-        // Örnek demo veri
-        setBoostTokens([
-          { id: "1", mint: "demo1", name: "BluPrint", symbol: "BLUEP", boostCount: 15 },
-          { id: "2", mint: "demo2", name: "Solana", symbol: "SOL", boostCount: 12 },
-          { id: "3", mint: "demo3", name: "Bonk", symbol: "BONK", boostCount: 8 },
-        ]);
+      if (data.success) {
+        setTokens(data.tokens);
       }
     } catch (err) {
-      console.error("Failed to fetch boost tokens:", err);
+      console.error('Banner fetch error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading || boostTokens.length === 0) {
-    return null;
-  }
+  const getRemainingTime = (expiresAt: number): string => {
+    const diff = expiresAt - Date.now();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (86400000)) / 3600000);
+    
+    if (days > 0) return `${days}g ${hours}s`;
+    if (hours > 0) return `${hours}s`;
+    return "bitiyor";
+  };
 
-  const marqueeItems = [...boostTokens, ...boostTokens, ...boostTokens];
+  if (loading || tokens.length === 0) return null;
+
+  const marqueeItems = [...tokens, ...tokens, ...tokens];
 
   return (
-    <div className="relative w-full overflow-hidden bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900 py-2 border-y border-purple-500/30">
-      <div className="relative flex overflow-hidden whitespace-nowrap">
+    <div className="fixed top-16 left-0 right-0 z-40 bg-black/95 backdrop-blur-sm border-y border-yellow-500/30 py-1.5">
+      <div className="relative overflow-hidden whitespace-nowrap">
         <motion.div
           animate={{ x: ["0%", "-50%"] }}
-          transition={{
-            duration: 20,
-            ease: "linear",
-            repeat: Infinity,
-          }}
-          className="flex gap-4"
+          transition={{ duration: 25, ease: "linear", repeat: Infinity }}
+          className="inline-flex items-center gap-2"
         >
-          {marqueeItems.map((token, index) => (
-            <Link
-              key={`${token.id}-${index}`}
-              href={`/?boost=${token.mint}`}
-              className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 rounded-full border border-purple-500/30 hover:border-purple-500 transition-all duration-200"
+          {marqueeItems.map((token, idx) => (
+            <button
+              key={`${token.mint}-${idx}`}
+              onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}
+              className="group flex items-center gap-2 px-3 py-1 bg-gray-800/80 rounded-full border border-yellow-500/40 hover:border-yellow-500 hover:bg-gray-800 transition-all duration-200"
             >
               {token.image ? (
-                <img src={token.image} alt={token.name} className="w-5 h-5 rounded-full" />
+                <img src={token.image} alt={token.symbol} className="w-5 h-5 rounded-full" />
               ) : (
-                <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-[10px]">
+                <div className="w-5 h-5 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center text-[10px]">
                   🚀
                 </div>
               )}
+              
               <span className="text-sm font-semibold text-white">{token.symbol}</span>
-              <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">
+              
+              <span className="text-[10px] font-bold text-yellow-400 bg-yellow-500/20 px-2 py-0.5 rounded-full">
                 🔥 {token.boostCount}
               </span>
-            </Link>
+              
+              <span className="text-[10px] text-gray-400 hidden sm:inline">
+                {getRemainingTime(token.expiresAt)}
+              </span>
+            </button>
           ))}
         </motion.div>
       </div>

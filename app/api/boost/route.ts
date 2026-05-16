@@ -1,91 +1,64 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { redis, KEYS } from '@/app/lib/redis';
+import { NextResponse } from 'next/server';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { redis } from '@/app/lib/redis';  // ✅ DOĞRU YOL
 
-export async function POST(req: NextRequest) {
-  try {
-    const { mintAddress, wallet } = await req.json();
-    
-    if (!mintAddress || !wallet) {
-      return NextResponse.json({ success: false, error: 'Missing mintAddress or wallet' }, { status: 400 });
-    }
-    
-    // Boost sayısını artır
-    const boostKey = `boost:${mintAddress}`;
-    const currentBoost = await redis.incr(boostKey);
-    
-    // Leaderboard'a ekle
-    await redis.zadd(KEYS.boostLeaderboard, { score: currentBoost, member: mintAddress });
-    
-    // Token bilgilerini al
-    const allTokens = await redis.lrange(KEYS.tokens, 0, -1);
-    let token = null;
-    
-    for (const t of allTokens) {
-      const tokenData = typeof t === 'string' ? JSON.parse(t) : t;
-      if (tokenData.mint === mintAddress) {
-        token = tokenData;
-        break;
-      }
-    }
-    
-    return NextResponse.json({
-      success: true,
-      boostCount: currentBoost,
-      token
-    });
-  } catch (error: any) {
-    console.error("Boost error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
+const PLATFORM_WALLET = new PublicKey(process.env.PLATFORM_WALLET!);
+const BOOST_DURATION_DAYS = 4;
 
-// GET: Boost leaderboard'u getir
-export async function GET(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const { mint, symbol, name, image, userWallet, signature } = await req.json();
     
-    // zrange ile en yüksek skorları al (descending için REV ile)
-    const topBoosts = await redis.zrange(KEYS.boostLeaderboard, 0, limit - 1, { 
-      rev: true, 
-      withScores: true 
-    });
+    // Transaction doğrula
+    const tx = await connection.getTransaction(signature);
+    if (!tx) throw new Error('Transaction not found');
     
-    const tokens = [];
-    // topBoosts format: [{ member: "mint", score: 15 }, ...]
-    for (const item of topBoosts) {
-      if (!item || typeof item !== 'object') continue;
-      
-      const mintAddress = 'member' in item ? item.member as string : null;
-      const boostCount = 'score' in item ? item.score as number : 0;
-      
-      if (!mintAddress) continue;
-      
-      // Token detaylarını bul
-      const allTokens = await redis.lrange(KEYS.tokens, 0, -1);
-      let token = null;
-      for (const t of allTokens) {
-        const tokenData = typeof t === 'string' ? JSON.parse(t) : t;
-        if (tokenData.mint === mintAddress) {
-          token = tokenData;
-          break;
-        }
-      }
-      
-      if (token) {
-        tokens.push({
-          ...token,
-          boostCount
-        });
-      }
+    // Mevcut boost sayısını al
+    let boostCount = 1;
+    const existingStr = await redis.get(`boost:stats:${mint}`);
+    if (existingStr) {
+      const existingData = typeof existingStr === 'string' ? JSON.parse(existingStr) : existingStr;
+      boostCount = existingData.boostCount + 1;
     }
     
-    return NextResponse.json({
-      success: true,
-      tokens
+    // 4 gün sonra bitecek
+    const expiresAt = Date.now() + (BOOST_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    
+    const boostData = {
+      mint,
+      symbol,
+      name,
+      image,
+      boostCount,
+      expiresAt,
+      userWallet,
+      boostedAt: Date.now(),
+    };
+    
+    // Aktif boost olarak kaydet (4 gün TTL)
+    await redis.set(`boost:active:${mint}`, JSON.stringify(boostData), {
+      ex: BOOST_DURATION_DAYS * 24 * 60 * 60
     });
+    
+    // İstatistik kaydet
+    await redis.set(`boost:stats:${mint}`, JSON.stringify({ boostCount, lastBoost: Date.now() }));
+    
+    // Leaderboard
+    await redis.zadd('boost:leaderboard', { score: boostCount, member: mint });
+    
+    // Aktivite
+    await redis.lpush('activity:feed', JSON.stringify({
+      type: 'boost',
+      mint,
+      symbol,
+      userWallet,
+      timestamp: Date.now(),
+    }));
+    
+    return NextResponse.json({ success: true, boostCount });
   } catch (error: any) {
-    console.error("Boost leaderboard error:", error);
+    console.error('Boost error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
