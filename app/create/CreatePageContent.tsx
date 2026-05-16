@@ -30,7 +30,7 @@ import { useToast } from "../components/ToastProvider";
 import { useI18n } from "../lib/i18n-provider";
 
 // ==================== KONFIGÜRASYON ====================
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/HOfnwF22z5T8BCHNl_KIo";
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=fdbb8762-06b5-4bbd-ab1e-33310587e2d4";
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
 const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
@@ -171,8 +171,6 @@ export default function CreatePageContent() {
         { trait_type: "Platform", value: "BluPrint" },
         { trait_type: "Type", value: "Meme Coin" },
         { trait_type: "Standard", value: "Token-2022" },
-        { trait_type: "Twitter", value: twitter || "" },
-        { trait_type: "Telegram", value: telegram || "" },
       ],
     };
     
@@ -220,7 +218,6 @@ export default function CreatePageContent() {
       return;
     }
 
-    // LocalStorage rate limit (1 dakikada 1 token)
     const lastCreate = localStorage.getItem('bluprint_last_create');
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
       const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
@@ -267,7 +264,7 @@ export default function CreatePageContent() {
       setStep("📤 Uploading metadata to IPFS...");
       const metadataUri = await uploadMetadataToIPFS();
       
-      // Mint keypair oluştur (Token-2022)
+      // Mint keypair
       setStep("🔑 Creating mint account (Token-2022)...");
       const mintKeypair = Keypair.generate();
       
@@ -285,13 +282,13 @@ export default function CreatePageContent() {
         ],
       };
       
-      // DOĞRU BOYUT HESABI (mint + metadata gövdesi)
+      // DOĞRU BOYUT HESABI (KRİTİK!)
       const mintLen = getMintLen([ExtensionType.MetadataPointer]);
-      const metadataLen = pack(tokenMetadata).length;
+      const metadataLen = metadataUri ? pack(tokenMetadata).length : 0;
       const totalLen = mintLen + metadataLen;
       const lamports = await connection.getMinimumBalanceForRentExemption(totalLen);
       
-      // ATA adresi (Token-2022 için)
+      // ATA adresi
       setStep("📝 Creating token account...");
       const ata = await getAssociatedTokenAddress(
         mintKeypair.publicKey,
@@ -300,11 +297,11 @@ export default function CreatePageContent() {
         TOKEN_2022_PROGRAM_ID
       );
       
-      // Supply hesapla
+      // Supply
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
-      // Transaction oluştur
-      setStep("📦 Building transaction (Token-2022 with metadata)...");
+      // Transaction
+      setStep("📦 Building transaction...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
@@ -321,17 +318,19 @@ export default function CreatePageContent() {
         })
       );
 
-      // 2. Metadata Pointer Extension'ı başlat
-      transaction.add(
-        createInitializeMetadataPointerInstruction(
-          mintKeypair.publicKey,
-          publicKey,
-          mintKeypair.publicKey,
-          TOKEN_2022_PROGRAM_ID
-        )
-      );
+      // 2. Metadata Pointer Extension (sadece metadata varsa)
+      if (metadataUri) {
+        transaction.add(
+          createInitializeMetadataPointerInstruction(
+            mintKeypair.publicKey,
+            publicKey,
+            mintKeypair.publicKey,
+            TOKEN_2022_PROGRAM_ID
+          )
+        );
+      }
 
-      // 3. Mint'i başlat (Token-2022)
+      // 3. Mint'i başlat
       transaction.add(
         createInitializeMintInstruction(
           mintKeypair.publicKey,
@@ -342,7 +341,7 @@ export default function CreatePageContent() {
         )
       );
 
-      // 4. Metadata'yı mint hesabına yaz
+      // 4. Metadata'yı yaz (sadece metadata varsa)
       if (metadataUri) {
         transaction.add(
           createInitializeInstruction({
@@ -369,7 +368,7 @@ export default function CreatePageContent() {
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare })
       );
 
-      // 6. ATA oluştur (Token-2022)
+      // 6. ATA oluştur
       transaction.add(
         createAssociatedTokenAccountInstruction(
           publicKey,
@@ -403,7 +402,7 @@ export default function CreatePageContent() {
         );
       }
 
-      // 9. Revoke'lar (Mint ve Freeze)
+      // 9. Revoke'lar
       if (secureToken) {
         if (revokeMint) {
           transaction.add(
@@ -433,8 +432,7 @@ export default function CreatePageContent() {
 
       transaction.partialSign(mintKeypair);
 
-      // İmzala ve gönder
-      setStep("📝 Please sign the transaction in your wallet...");
+      setStep("📝 Please sign the transaction...");
       setProgress(92);
       
       const signature = await sendTransaction(transaction, connection, {
@@ -446,7 +444,6 @@ export default function CreatePageContent() {
       setProgress(95);
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Success ekranı
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your Token-2022 is ready!");
@@ -480,7 +477,6 @@ export default function CreatePageContent() {
       showToast(t("toast_created"), "success");
       setTokensLeft((prev) => prev - 1);
       
-      // Redis'e kaydet
       try {
         await fetch("/api/tokens", {
           method: "POST",
@@ -564,7 +560,6 @@ export default function CreatePageContent() {
         <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-tl from-purple-600/20 to-transparent blur-3xl" />
         
         <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
-          {/* Banner */}
           {tokensLeft > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
@@ -583,7 +578,6 @@ export default function CreatePageContent() {
             </motion.div>
           )}
 
-          {/* Başlık */}
           <div className="text-center mb-6 sm:mb-10">
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
@@ -601,9 +595,7 @@ export default function CreatePageContent() {
             </motion.p>
           </div>
 
-          {/* Form + Panel */}
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-8">
-            {/* SOL TARAF - FORM */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 space-y-4 sm:space-y-6">
               <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
@@ -640,7 +632,6 @@ export default function CreatePageContent() {
                 <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("create_desc_placeholder")} className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none resize-none" />
               </div>
 
-              {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
                   🎫 Promo Code <span className="text-gray-500">(optional - get 0.02 SOL discount!)</span>
@@ -660,9 +651,7 @@ export default function CreatePageContent() {
               </div>
             </div>
 
-            {/* SAĞ TARAF - LAUNCH PANEL */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 lg:sticky lg:top-28 space-y-4">
-              {/* Fee Info */}
               <div className="text-center">
                 <div className="text-5xl mb-2 animate-pulse">⚡</div>
                 <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{t("create_launch")}</div>
@@ -685,7 +674,6 @@ export default function CreatePageContent() {
                 </div>
               </div>
 
-              {/* REFERRAL PANEL */}
               <div className="rounded-xl p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">💰</span>
@@ -695,7 +683,6 @@ export default function CreatePageContent() {
                   Share your promo code and earn <span className="text-green-400 font-bold">0.02 SOL</span> for every friend who creates a token!
                 </p>
                 
-                {/* Promo Code Göster */}
                 {publicKey && (
                   <div className="mb-3 p-2 bg-gray-800/50 rounded-lg">
                     <p className="text-xs text-gray-400 mb-1">Your Promo Code:</p>
@@ -719,7 +706,6 @@ export default function CreatePageContent() {
                   </div>
                 )}
                 
-                {/* Referral Link */}
                 {publicKey && (
                   <div className="p-2 bg-gray-800/50 rounded-lg">
                     <p className="text-xs text-gray-400 mb-1">Your Referral Link:</p>
@@ -747,7 +733,6 @@ export default function CreatePageContent() {
                 {!publicKey && <p className="text-xs text-yellow-500 mt-2">⚠️ Connect wallet to get your promo code and referral link</p>}
               </div>
 
-              {/* Secure Token - 3 Revoke */}
               <div className="rounded-xl p-4 sm:p-5 bg-gradient-to-r from-blue-600/30 to-purple-600/30 backdrop-blur-sm border border-blue-500/30 shadow-lg">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-base font-bold text-white">🔒 {t("create_secure_label")}</span>
