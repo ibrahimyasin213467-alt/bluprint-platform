@@ -63,9 +63,7 @@ function buildMetadataInstruction(
       mint,
       mintAuthority,
       payer,
-      updateAuthority: payer,
-      systemProgram: SystemProgram.programId,
-      rent: SYSVAR_RENT_PUBKEY,
+      updateAuthority: mintAuthority, // DEĞİŞTİ: payer yerine mintAuthority
     },
     {
       createMetadataAccountArgsV3: {
@@ -658,4 +656,4 @@ export default function CreatePageContent() {
       </div>
     </PageTransition>
   );
-}
+} 
