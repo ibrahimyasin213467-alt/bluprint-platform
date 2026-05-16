@@ -18,8 +18,6 @@ export async function POST(req: NextRequest) {
       attributes: [
         { trait_type: 'Platform', value: 'BluPrint' },
         { trait_type: 'Type', value: 'Meme Coin' },
-        { trait_type: 'Twitter', value: twitter || '' },
-        { trait_type: 'Telegram', value: telegram || '' },
       ],
     };
 
