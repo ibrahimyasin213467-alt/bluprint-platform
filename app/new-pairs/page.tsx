@@ -16,10 +16,11 @@ interface Token {
   txns24h?: number;
   pairAddress?: string;
   dexUrl?: string;
+  dex?: string;
 }
 
 export default function NewPairsPage() {
-  const [activeTab, setActiveTab] = useState<"bluprint" | "market">("market");
+  const [activeTab, setActiveTab] = useState<"market" | "bluprint">("market");
   const [bluprintTokens, setBluprintTokens] = useState<Token[]>([]);
   const [marketTokens, setMarketTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +93,7 @@ export default function NewPairsPage() {
 
   const TokenRow = ({ token, index, isBluprint }: { token: Token; index: number; isBluprint: boolean }) => (
     <div className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
-      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
+      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(isBluprint ? `https://solscan.io/token/${token.mint}` : (token.dexUrl || `https://dexscreener.com/solana/${token.pairAddress}`), "_blank")}>
         {/* Rank */}
         <div className="w-10 text-center">
           <span className={`text-sm font-mono ${index < 3 ? "text-yellow-500" : "text-gray-500"}`}>
@@ -101,12 +102,18 @@ export default function NewPairsPage() {
         </div>
         
         {/* Token Info */}
-        <div className="flex items-center gap-3 w-48">
+        <div className="flex items-center gap-3 w-56">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden flex-shrink-0">
             {token.image ? (
               <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
+            ) : isBluprint ? (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-xs">
+                B
+              </div>
             ) : (
-              <span className="text-sm">🚀</span>
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center text-xs">
+                D
+              </div>
             )}
           </div>
           <div>
@@ -115,22 +122,48 @@ export default function NewPairsPage() {
           </div>
         </div>
         
-        {/* Market Cap / Liquidity */}
+        {/* Dex / Platform */}
+        <div className="w-24">
+          {!isBluprint && token.dex && (
+            <div className="flex items-center gap-1">
+              {token.dex === "DexScreener" && (
+                <span className="text-xs text-orange-400">DexScreener</span>
+              )}
+              {token.dex === "Raydium" && (
+                <span className="text-xs text-blue-400">Raydium</span>
+              )}
+              {token.dex === "PumpSwap" && (
+                <span className="text-xs text-purple-400">PumpSwap</span>
+              )}
+              {!token.dex && <span className="text-xs text-gray-500">DEX</span>}
+            </div>
+          )}
+          {isBluprint && (
+            <div className="flex items-center gap-1">
+              <div className="w-4 h-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                <span className="text-[8px] text-white">B</span>
+              </div>
+              <span className="text-xs text-blue-400">BluPrint</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Liquidity */}
         <div className="flex-1 text-right">
           <div className="text-sm text-white">{token.liquidity ? formatNumber(token.liquidity) : "—"}</div>
-          <div className="text-xs text-gray-600">Liquidity</div>
+          <div className="text-xs text-gray-600">Liq</div>
         </div>
         
         {/* Volume 24h */}
         <div className="w-28 text-right">
           <div className="text-sm text-white">{formatNumber(token.volume24h)}</div>
-          <div className="text-xs text-gray-600">Volume 24h</div>
+          <div className="text-xs text-gray-600">Vol 24h</div>
         </div>
         
         {/* Price Change */}
         <div className="w-24 text-right">
           {formatPriceChange(token.priceChange24h)}
-          <div className="text-xs text-gray-600">24h %</div>
+          <div className="text-xs text-gray-600">24h</div>
         </div>
         
         {/* Action */}
@@ -156,17 +189,17 @@ export default function NewPairsPage() {
             <p className="text-gray-500 text-sm mt-1">Discover the latest tokens on Solana</p>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs - Market sekmesi başta */}
           <div className="flex gap-1 mb-6 border-b border-gray-800">
             <button
               onClick={() => setActiveTab("market")}
               className={`px-6 py-2 text-sm font-medium transition-all duration-200 ${
                 activeTab === "market"
-                  ? "text-blue-400 border-b-2 border-blue-400"
+                  ? "text-orange-400 border-b-2 border-orange-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              🌍 Market
+              🌍 DexScreener
             </button>
             <button
               onClick={() => setActiveTab("bluprint")}
@@ -193,7 +226,7 @@ export default function NewPairsPage() {
                   onClick={() => setFilter(f.id as any)}
                   className={`px-4 py-1.5 rounded-full text-xs transition-all duration-200 ${
                     filter === f.id
-                      ? "bg-blue-600 text-white"
+                      ? "bg-orange-600 text-white"
                       : "bg-gray-800 text-gray-400 hover:bg-gray-700"
                   }`}
                 >
@@ -206,7 +239,8 @@ export default function NewPairsPage() {
           {/* Table Header */}
           <div className="hidden md:flex items-center gap-3 px-4 py-2 text-xs text-gray-500 border-b border-gray-800">
             <div className="w-10">#</div>
-            <div className="w-48">Token</div>
+            <div className="w-56">Token</div>
+            <div className="w-24">Source</div>
             <div className="flex-1 text-right">Liquidity</div>
             <div className="w-28 text-right">Volume 24h</div>
             <div className="w-24 text-right">Price 24h</div>
