@@ -18,10 +18,6 @@ import {
   createSetAuthorityInstruction,
   AuthorityType,
 } from "@solana/spl-token";
-import {
-  createCreateMetadataAccountV3Instruction,
-  PROGRAM_ID as METADATA_PROGRAM_ID,
-} from "@metaplex-foundation/mpl-token-metadata";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
@@ -38,16 +34,6 @@ const REFERRAL_REWARD = 0.02 * LAMPORTS_PER_SOL;
 const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;
 const REFERRAL_FEE = 0.03 * LAMPORTS_PER_SOL;
 const MAX_RETRIES = 2;
-
-// Metadata PDA hesaplama
-function findMetadataPda(mint: PublicKey): PublicKey {
-  const seeds = [
-    Buffer.from("metadata"),
-    METADATA_PROGRAM_ID.toBuffer(),
-    mint.toBuffer(),
-  ];
-  return PublicKey.findProgramAddressSync(seeds, METADATA_PROGRAM_ID)[0];
-}
 
 export default function CreatePageContent() {
   const { publicKey, sendTransaction, connected } = useWallet();
@@ -164,50 +150,6 @@ export default function CreatePageContent() {
     }
   };
 
-  const uploadMetadataToIPFS = async (): Promise<string | null> => {
-    const pinataJwt = process.env.NEXT_PUBLIC_PINATA_JWT;
-    if (!pinataJwt) {
-      console.warn("No Pinata JWT found");
-      return null;
-    }
-    
-    const metadata = {
-      name: tokenName,
-      symbol: tokenSymbol.toUpperCase(),
-      description: description || "Launched on BluPrint Platform",
-      image: tokenImage || "https://gateway.pinata.cloud/ipfs/QmaZYRoR1eBSqESX4Fo5NR28CZPNig9YuZfJsBzmG7KPe3",
-      external_url: website || "https://bluprint.fun",
-      attributes: [
-        { trait_type: "Platform", value: "BluPrint" },
-        { trait_type: "Type", value: "Meme Coin" },
-        { trait_type: "Secure Token", value: secureToken ? "Yes (3 Revokes)" : "No" },
-        { trait_type: "Twitter", value: twitter || "" },
-        { trait_type: "Telegram", value: telegram || "" },
-      ],
-    };
-    
-    try {
-      const res = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${pinataJwt}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          pinataContent: metadata, 
-          pinataMetadata: { name: `metadata-${tokenName}-${Date.now()}` } 
-        }),
-      });
-      const data = await res.json();
-      if (!data.IpfsHash) throw new Error("IPFS upload failed");
-      console.log("✅ IPFS URI:", data.IpfsHash);
-      return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
-    } catch (err) {
-      console.error("IPFS upload error:", err);
-      return null;
-    }
-  };
-
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
     if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
@@ -273,10 +215,6 @@ export default function CreatePageContent() {
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      // IPFS Metadata yükle
-      setStep("📤 Uploading metadata to IPFS...");
-      const metadataUri = await uploadMetadataToIPFS();
-      
       // Mint keypair oluştur
       setStep("🔑 Creating mint account...");
       const mintKeypair = Keypair.generate();
@@ -296,37 +234,7 @@ export default function CreatePageContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // ========== 1. METADATA - EN BAŞA (signature sorununu çözer) ==========
-      if (metadataUri) {
-        const metadataPDA = findMetadataPda(mintKeypair.publicKey);
-        const metadataInstruction = createCreateMetadataAccountV3Instruction(
-          {
-            metadata: metadataPDA,
-            mint: mintKeypair.publicKey,
-            mintAuthority: publicKey,
-            payer: publicKey,
-            updateAuthority: publicKey,
-          },
-          {
-            createMetadataAccountArgsV3: {
-              data: {
-                name: tokenName,
-                symbol: tokenSymbol.toUpperCase(),
-                uri: metadataUri,
-                sellerFeeBasisPoints: 0,
-                creators: null,
-                collection: null,
-                uses: null,
-              },
-              isMutable: !revokeUpdate,
-              collectionDetails: null,
-            },
-          }
-        );
-        transaction.add(metadataInstruction);
-      }
-
-      // 2. Mint account oluştur
+      // 1. Mint account oluştur
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -337,12 +245,12 @@ export default function CreatePageContent() {
         })
       );
 
-      // 3. Mint'i başlat
+      // 2. Mint'i başlat
       transaction.add(
         createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null)
       );
 
-      // 4. Fee transferleri
+      // 3. Fee transferleri
       transaction.add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare })
       );
@@ -353,17 +261,17 @@ export default function CreatePageContent() {
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare })
       );
 
-      // 5. ATA oluştur
+      // 4. ATA oluştur
       transaction.add(
         createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey)
       );
 
-      // 6. Token mintle
+      // 5. Token mintle
       transaction.add(
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // 7. Referral transfer
+      // 6. Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -374,7 +282,7 @@ export default function CreatePageContent() {
         );
       }
 
-      // 8. 1. ve 2. Revoke (Mint ve Freeze)
+      // 7. 1. ve 2. Revoke (Mint ve Freeze)
       if (secureToken) {
         if (revokeMint) {
           transaction.add(
@@ -428,6 +336,13 @@ export default function CreatePageContent() {
         twitter,
         telegram,
         website,
+        tokenImage,
+        description,
+        // Metadata için gerekli bilgiler
+        metadataName: tokenName,
+        metadataSymbol: tokenSymbol,
+        metadataUri: null, // Sonra eklenecek
+        metadataAdded: false,
       });
       setStatus("");
       showToast(t("toast_created"), "success");
