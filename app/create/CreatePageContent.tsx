@@ -34,9 +34,9 @@ const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alc
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET    = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
 const KUZEN_WALLET    = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
-const BASE_FEE        = 0.15 * LAMPORTS_PER_SOL;
-const REFERRAL_FEE    = 0.10 * LAMPORTS_PER_SOL;
-const REFERRAL_REWARD = 0.05 * LAMPORTS_PER_SOL;
+const BASE_FEE        = 0.05 * LAMPORTS_PER_SOL;
+const REFERRAL_FEE    = 0.03 * LAMPORTS_PER_SOL;
+const REFERRAL_REWARD = 0.02 * LAMPORTS_PER_SOL;
 
 // Metaplex metadata instruction'ı — UMI kullanmadan, direkt web3.js ile
 function buildMetadataInstruction(
