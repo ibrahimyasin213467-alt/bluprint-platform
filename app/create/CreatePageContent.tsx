@@ -18,7 +18,7 @@ import {
 } from "@solana/spl-token";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { mplTokenMetadata, createMetadataAccountV3 } from "@metaplex-foundation/mpl-token-metadata";
-import { publicKey as umiPublicKey } from "@metaplex-foundation/umi";
+import { publicKey as umiPublicKey, keypairIdentity, createSignerFromKeypair } from "@metaplex-foundation/umi";
 import { fromWeb3JsKeypair } from "@metaplex-foundation/umi-web3js-adapters";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
@@ -36,16 +36,6 @@ const REFERRAL_REWARD = 0.025 * LAMPORTS_PER_SOL;
 const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;
 const REFERRAL_FEE = 0.025 * LAMPORTS_PER_SOL;
 const MAX_RETRIES = 1;
-
-// Metadata PDA hesaplama
-function findMetadataPda(mint: PublicKey): PublicKey {
-  const seeds = [
-    Buffer.from("metadata"),
-    new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
-    mint.toBuffer(),
-  ];
-  return PublicKey.findProgramAddressSync(seeds, new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"))[0];
-}
 
 export default function CreatePageContent() {
   const { publicKey, sendTransaction, connected } = useWallet();
@@ -99,6 +89,7 @@ export default function CreatePageContent() {
       .catch(() => {});
   }, []);
 
+  // Kendi promo code'umu al
   useEffect(() => {
     const fetchMyPromoCode = async () => {
       if (publicKey) {
@@ -116,6 +107,7 @@ export default function CreatePageContent() {
     fetchMyPromoCode();
   }, [publicKey]);
 
+  // Promo code girilince referrer wallet'ı bul
   useEffect(() => {
     const fetchReferrerByPromoCode = async () => {
       if (promoCodeInput && promoCodeInput.length === 7) {
@@ -179,6 +171,8 @@ export default function CreatePageContent() {
         { trait_type: "Platform", value: "BluPrint" },
         { trait_type: "Type", value: "Meme Coin" },
         { trait_type: "Secure Token", value: secureToken ? "Yes (3 Revokes)" : "No" },
+        { trait_type: "Twitter", value: twitter || "" },
+        { trait_type: "Telegram", value: telegram || "" },
       ],
     };
     
@@ -226,7 +220,7 @@ export default function CreatePageContent() {
       return;
     }
 
-    // LocalStorage rate limit
+    // LocalStorage rate limit (1 dakikada 1 token)
     const lastCreate = localStorage.getItem('bluprint_last_create');
     if (lastCreate && Date.now() - parseInt(lastCreate) < 60000) {
       const remaining = Math.ceil((60000 - (Date.now() - parseInt(lastCreate))) / 1000);
@@ -270,32 +264,29 @@ export default function CreatePageContent() {
       const kuzenShare = feeAmount - platformShare - yourShare;
       
       // IPFS Metadata yükle
-      setStep("📤 Uploading metadata...");
+      setStep("📤 Uploading metadata to IPFS...");
       const metadataUri = await uploadMetadataToIPFS();
       
-      // Mint keypair
+      // Mint keypair oluştur
       setStep("🔑 Creating mint account...");
       const mintKeypair = Keypair.generate();
       const lamports = await getMinimumBalanceForRentExemptMint(connection);
       
-      // ATA
+      // ATA oluştur
       setStep("📝 Creating token account...");
       const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
       
-      // Supply
+      // Supply hesapla
       const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
       
-      // Metadata PDA
-      const metadataPDA = findMetadataPda(mintKeypair.publicKey);
-      
-      // Transaction
+      // Transaction oluştur
       setStep("📦 Building transaction...");
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      // 1. Mint account oluştur
+      // Instruction'ları ekle
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -304,19 +295,15 @@ export default function CreatePageContent() {
           lamports,
           programId: TOKEN_PROGRAM_ID,
         }),
-        // 2. Mint'i başlat
         createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null),
-        // 3. Fee transferleri
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare }),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(OWNER_WALLET), lamports: yourShare }),
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare }),
-        // 4. ATA oluştur
         createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey),
-        // 5. Token mintle
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // 6. Referral transfer
+      // Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -327,7 +314,7 @@ export default function CreatePageContent() {
         );
       }
 
-      // 7. 1. ve 2. Revoke (Mint ve Freeze)
+      // 1. ve 2. Revoke (Mint ve Freeze)
       if (secureToken) {
         if (revokeMint) {
           transaction.add(createSetAuthorityInstruction(mintKeypair.publicKey, publicKey, AuthorityType.MintTokens, null));
@@ -337,7 +324,7 @@ export default function CreatePageContent() {
         }
       }
 
-      // 8. METADATA - TEK TRANSACTION İÇİNDE (Pump.fun gibi)
+      // METADATA - AYNI TRANSACTION İÇİNDE
       if (metadataUri) {
         const umi = createUmi(RPC_URL);
         const umiKeypair = fromWeb3JsKeypair(mintKeypair);
@@ -370,7 +357,7 @@ export default function CreatePageContent() {
       transaction.partialSign(mintKeypair);
 
       // İmzala ve gönder
-      setStep("📝 Please sign the transaction...");
+      setStep("📝 Please sign the transaction in your wallet...");
       setProgress(92);
       
       const signature = await sendTransaction(transaction, connection, {
@@ -382,7 +369,7 @@ export default function CreatePageContent() {
       setProgress(95);
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Success
+      // Success ekranı
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
@@ -429,12 +416,15 @@ export default function CreatePageContent() {
             website,
           }),
         });
+        console.log("✅ Token saved to Redis");
       } catch (err) {
         console.error("Failed to save token to Redis:", err);
       }
       
+      // Rate limit kaydet
       localStorage.setItem('bluprint_last_create', Date.now().toString());
       
+      // Promo code'u yeniden al
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
@@ -447,6 +437,8 @@ export default function CreatePageContent() {
       let errorMessage = err.message || "Unknown error";
       if (err.message?.includes("insufficient")) {
         errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
+      } else if (err.message?.includes("User rejected")) {
+        errorMessage = "You rejected the transaction.";
       }
       
       setStatus(`❌ ${errorMessage}`);
@@ -492,6 +484,7 @@ export default function CreatePageContent() {
         <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-tl from-purple-600/20 to-transparent blur-3xl" />
         
         <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
+          {/* Banner */}
           {tokensLeft > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
@@ -510,6 +503,7 @@ export default function CreatePageContent() {
             </motion.div>
           )}
 
+          {/* Başlık */}
           <div className="text-center mb-6 sm:mb-10">
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
@@ -527,6 +521,7 @@ export default function CreatePageContent() {
             </motion.p>
           </div>
 
+          {/* Form + Panel */}
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-8">
             {/* SOL TARAF - FORM */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 space-y-4 sm:space-y-6">
@@ -565,6 +560,7 @@ export default function CreatePageContent() {
                 <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("create_desc_placeholder")} className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none resize-none" />
               </div>
 
+              {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
                   🎫 Promo Code <span className="text-gray-500">(optional - get 0.025 SOL discount!)</span>
@@ -586,6 +582,7 @@ export default function CreatePageContent() {
 
             {/* SAĞ TARAF - LAUNCH PANEL */}
             <div className="bg-white/10 dark:bg-gray-900/50 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-white/20 p-4 sm:p-8 lg:sticky lg:top-28 space-y-4">
+              {/* Fee Info */}
               <div className="text-center">
                 <div className="text-5xl mb-2 animate-pulse">⚡</div>
                 <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{t("create_launch")}</div>
@@ -618,6 +615,7 @@ export default function CreatePageContent() {
                   Share your promo code and earn <span className="text-green-400 font-bold">0.025 SOL</span> for every friend who creates a token!
                 </p>
                 
+                {/* Promo Code Göster */}
                 {publicKey && (
                   <div className="mb-3 p-2 bg-gray-800/50 rounded-lg">
                     <p className="text-xs text-gray-400 mb-1">Your Promo Code:</p>
@@ -641,6 +639,7 @@ export default function CreatePageContent() {
                   </div>
                 )}
                 
+                {/* Referral Link */}
                 {publicKey && (
                   <div className="p-2 bg-gray-800/50 rounded-lg">
                     <p className="text-xs text-gray-400 mb-1">Your Referral Link:</p>
