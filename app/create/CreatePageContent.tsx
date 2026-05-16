@@ -720,66 +720,7 @@ export default function CreatePageContent() {
                 </div>
               </div>
 
-              {/* REFERRAL PANEL */}
-              <div className="rounded-xl p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">💰</span>
-                  <span className="font-bold text-green-400 text-sm">REFERRAL PROGRAM</span>
-                </div>
-                <p className="text-xs text-gray-300 mb-2">
-                  Share your promo code and earn <span className="text-green-400 font-bold">0.02 SOL</span> for every friend who creates a token!
-                </p>
-                
-                {publicKey && (
-                  <div className="mb-3 p-2 bg-gray-800/50 rounded-lg">
-                    <p className="text-xs text-gray-400 mb-1">Your Promo Code:</p>
-                    <div className="flex gap-2">
-                      <code className="flex-1 px-3 py-2 text-sm font-mono bg-gray-900 rounded-lg text-green-400 border border-gray-700">
-                        {myPromoCode || "Create a token first"}
-                      </code>
-                      <button
-                        onClick={() => {
-                          if (myPromoCode) {
-                            navigator.clipboard.writeText(myPromoCode);
-                            showToast("Promo code copied!", "success");
-                          }
-                        }}
-                        disabled={!myPromoCode}
-                        className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {publicKey && (
-                  <div className="p-2 bg-gray-800/50 rounded-lg">
-                    <p className="text-xs text-gray-400 mb-1">Your Referral Link:</p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/create?ref=${publicKey}`}
-                        className="flex-1 px-3 py-2 text-xs bg-gray-900 border border-gray-700 rounded-lg text-gray-300 outline-none"
-                      />
-                      <button
-                        onClick={() => {
-                          const link = `${window.location.origin}/create?ref=${publicKey}`;
-                          navigator.clipboard.writeText(link);
-                          showToast("Referral link copied!", "success");
-                        }}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {!publicKey && <p className="text-xs text-yellow-500 mt-2">⚠️ Connect wallet to get your promo code and referral link</p>}
-              </div>
-
+              
               {/* Secure Token - 3 Revoke */}
               <div className="rounded-xl p-4 sm:p-5 bg-gradient-to-r from-blue-600/30 to-purple-600/30 backdrop-blur-sm border border-blue-500/30 shadow-lg">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
