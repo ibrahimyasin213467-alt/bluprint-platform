@@ -2,43 +2,41 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const metadata = await req.json();
 
-    if (!file) {
+    // Validate required fields
+    if (
+      !metadata.name ||
+      !metadata.symbol ||
+      !metadata.description ||
+      !metadata.image
+    ) {
       return NextResponse.json(
-        { success: false, error: 'No file uploaded' },
+        { 
+          success: false, 
+          error: 'Missing required metadata fields: name, symbol, description, image required' 
+        },
         { status: 400 }
       );
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    // Optional: Validate image URL format
+    if (!metadata.image.startsWith('https://')) {
       return NextResponse.json(
-        { success: false, error: 'File must be an image' },
+        { success: false, error: 'Image must be a valid HTTPS URL' },
         { status: 400 }
       );
     }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json(
-        { success: false, error: 'File must be less than 5MB' },
-        { status: 400 }
-      );
-    }
-
-    const pinataFormData = new FormData();
-    pinataFormData.append('file', file);
 
     const pinataRes = await fetch(
-      'https://api.pinata.cloud/pinning/pinFileToIPFS',
+      'https://api.pinata.cloud/pinning/pinJSONToIPFS',
       {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.PINATA_JWT}`,
         },
-        body: pinataFormData,
+        body: JSON.stringify(metadata),
       }
     );
 
@@ -51,15 +49,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const data = await pinataRes.json();
+    const pinataData = await pinataRes.json();
 
     return NextResponse.json({
       success: true,
-      url: `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`,
-      hash: data.IpfsHash,
+      uri: `https://gateway.pinata.cloud/ipfs/${pinataData.IpfsHash}`,
+      hash: pinataData.IpfsHash,
     });
   } catch (err: any) {
-    console.error('Upload error:', err);
+    console.error('Metadata upload error:', err);
     return NextResponse.json(
       {
         success: false,

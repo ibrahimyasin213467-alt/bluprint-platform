@@ -18,6 +18,9 @@ import {
   createSetAuthorityInstruction,
   AuthorityType,
 } from "@solana/spl-token";
+import {
+  createCreateMetadataAccountV3Instruction,
+} from "@metaplex-foundation/mpl-token-metadata";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
@@ -33,7 +36,11 @@ const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
 const REFERRAL_REWARD = 0.02 * LAMPORTS_PER_SOL;
 const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;
 const REFERRAL_FEE = 0.03 * LAMPORTS_PER_SOL;
-const MAX_RETRIES = 2;
+
+// Token Metadata Program ID
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 export default function CreatePageContent() {
   const { publicKey, sendTransaction, connected } = useWallet();
@@ -127,21 +134,36 @@ export default function CreatePageContent() {
       }
     };
     fetchReferrerByPromoCode();
-  }, [promoCodeInput]);
+  }, [promoCodeInput, publicKey, showToast]);
 
+  // ==================== RESİM YÜKLEME (PINATA) ====================
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    showToast(t("toast_uploading"), "info");
+    
+    if (!file.type.startsWith('image/')) {
+      showToast("❌ Please upload an image file", "error");
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("❌ Image must be less than 5MB", "error");
+      return;
+    }
+    
+    showToast("📤 Uploading image to IPFS...", "info");
+    
     const formData = new FormData();
-    formData.append("logo", file);
+    formData.append("file", file);
+    
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
+      
       if (data.success) {
         setTokenImage(data.url);
         setPreviewImage(URL.createObjectURL(file));
-        showToast(t("toast_upload_success"), "success");
+        showToast("✅ Image uploaded to IPFS!", "success");
       } else {
         showToast(`❌ ${data.error}`, "error");
       }
@@ -150,15 +172,64 @@ export default function CreatePageContent() {
     }
   };
 
+  // ==================== METADATA YÜKLEME (PINATA) ====================
+  const uploadMetadataToPinata = async (imageUrl: string) => {
+    const metadata = {
+      name: tokenName,
+      symbol: tokenSymbol,
+      description: description || `${tokenName} token created on BluPrint`,
+      image: imageUrl,
+      external_url: "https://bluprint.fun",
+      attributes: [
+        {
+          trait_type: "Created By",
+          value: "BluPrint"
+        },
+        {
+          trait_type: "Supply",
+          value: tokenSupply.toLocaleString()
+        },
+        {
+          trait_type: "Decimals",
+          value: tokenDecimals
+        }
+      ],
+      properties: {
+        creators: [
+          {
+            address: publicKey?.toString(),
+            share: 100
+          }
+        ]
+      }
+    };
+
+    const res = await fetch("/api/upload-metadata", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(metadata),
+    });
+
+    const data = await res.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || "Failed to upload metadata");
+    }
+    
+    return data.uri;
+  };
+
   const validateInputs = useCallback(() => {
     if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
     if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Symbol must be 2-8 characters";
     if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return "Symbol can only contain letters and numbers";
     if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return "Supply must be between 1,000 and 10,000,000,000";
     if (tokenDecimals < 0 || tokenDecimals > 9) return "Decimals must be between 0 and 9";
+    if (!tokenImage) return "Please upload a logo";
     return null;
-  }, [tokenName, tokenSymbol, tokenSupply, tokenDecimals]);
+  }, [tokenName, tokenSymbol, tokenSupply, tokenDecimals, tokenImage]);
 
+  // ==================== TOKEN OLUŞTURMA ====================
   const createToken = async () => {
     if (isProcessing || loading) return;
     if (!publicKey) {
@@ -183,7 +254,7 @@ export default function CreatePageContent() {
     setLoading(true);
     setProgress(0);
     setStep("🚀 Initializing...");
-    setStatus("Preparing token...");
+    setStatus("");
 
     const start = Date.now();
 
@@ -192,11 +263,20 @@ export default function CreatePageContent() {
       setProgress((prev) => {
         if (prev >= 90) return 90;
         const elapsed = (Date.now() - start) / 1000;
-        return Math.min(90, Math.floor((elapsed / 10) * 100));
+        return Math.min(90, Math.floor((elapsed / 15) * 100));
       });
     }, 100);
 
     try {
+      // ========== 1. METADATA'YI IPFS'E YÜKLE ==========
+      setStep("📤 Uploading metadata to IPFS...");
+      setProgress(5);
+      
+      const metadataUri = await uploadMetadataToPinata(tokenImage);
+      console.log("✅ Metadata URI:", metadataUri);
+      setProgress(15);
+
+      // ========== 2. TOKEN OLUŞTUR ==========
       const connection = new Connection(RPC_URL, "confirmed");
       
       // Referral sistemi
@@ -214,19 +294,43 @@ export default function CreatePageContent() {
       const yourShare = Math.floor(feeAmount * 0.58);
       const kuzenShare = feeAmount - platformShare - yourShare;
       
-      // Mint keypair (SPL Token)
+      // Mint keypair
       setStep("🔑 Creating mint account...");
+      setProgress(20);
       const mintKeypair = Keypair.generate();
       const lamports = await getMinimumBalanceForRentExemptMint(connection);
       
       // ATA
       setStep("📝 Creating token account...");
+      setProgress(30);
       const ata = await getAssociatedTokenAddress(mintKeypair.publicKey, publicKey);
       
-      const supply = Number(tokenSupply) * Math.pow(10, tokenDecimals);
+      // Supply hesaplama (BigInt ile güvenli)
+      const supply = BigInt(tokenSupply) * BigInt(10 ** tokenDecimals);
+      
+      // Metadata PDA
+      const [metadataPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+          mintKeypair.publicKey.toBuffer(),
+        ],
+        TOKEN_METADATA_PROGRAM_ID
+      );
+      
+      const metadataData = {
+        name: tokenName,
+        symbol: tokenSymbol,
+        uri: metadataUri,
+        sellerFeeBasisPoints: 0,
+        creators: null,
+        collection: null,
+        uses: null,
+      };
       
       // Transaction
       setStep("📦 Building transaction...");
+      setProgress(40);
       const transaction = new Transaction();
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
@@ -264,12 +368,32 @@ export default function CreatePageContent() {
         createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey)
       );
 
-      // 5. Token mintle
+      // 5. Token mintle (BigInt ile)
       transaction.add(
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // 6. Referral transfer
+      // 6. METADATA oluştur
+      transaction.add(
+        createCreateMetadataAccountV3Instruction(
+          {
+            metadata: metadataPda,
+            mint: mintKeypair.publicKey,
+            mintAuthority: publicKey,
+            payer: publicKey,
+            updateAuthority: publicKey,
+          },
+          {
+            createMetadataAccountArgsV3: {
+              data: metadataData,
+              isMutable: !revokeUpdate,
+              collectionDetails: null,
+            },
+          }
+        )
+      );
+
+      // 7. Referral transfer
       if (hasReferral && finalReferrer) {
         transaction.add(
           SystemProgram.transfer({
@@ -280,7 +404,7 @@ export default function CreatePageContent() {
         );
       }
 
-      // 7. Revoke'lar
+      // 8. Revoke'lar
       if (secureToken) {
         if (revokeMint) {
           transaction.add(
@@ -297,17 +421,20 @@ export default function CreatePageContent() {
       transaction.partialSign(mintKeypair);
 
       setStep("📝 Please sign the transaction...");
-      setProgress(92);
+      setProgress(75);
       
-      const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: true,
-        maxRetries: MAX_RETRIES,
-      });
+      console.log("📋 Transaction instructions count:", transaction.instructions.length);
       
-      setStep("⏳ Finalizing...");
-      setProgress(95);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
+      const signature = await sendTransaction(transaction, connection);
+      
+      setStep("⏳ Confirming transaction...");
+      setProgress(90);
+      
+      const confirmation = await connection.confirmTransaction(signature, "confirmed");
+      if (confirmation.value.err) {
+        throw new Error(`Transaction failed: ${confirmation.value.err}`);
+      }
+      
       clearInterval(progressInterval.current!);
       setProgress(100);
       setStep("✅ Done! Your token is ready!");
@@ -315,6 +442,7 @@ export default function CreatePageContent() {
       setTime((Date.now() - start) / 1000);
       const newMintAddress = mintKeypair.publicKey.toBase58();
       setMintAddress(newMintAddress);
+      
       setSuccessData({
         mint: newMintAddress,
         name: tokenName,
@@ -334,9 +462,11 @@ export default function CreatePageContent() {
         website,
         tokenImage,
         description,
+        metadataUri,
       });
+      
       setStatus("");
-      showToast(t("toast_created"), "success");
+      showToast("🎉 Token created successfully!", "success");
       setTokensLeft((prev) => prev - 1);
       
       // Redis'e kaydet
@@ -351,6 +481,7 @@ export default function CreatePageContent() {
             createdBy: publicKey.toString(),
             createdAt: new Date().toISOString(),
             image: tokenImage,
+            metadataUri,
             twitter,
             telegram,
             website,
@@ -363,11 +494,13 @@ export default function CreatePageContent() {
       
       localStorage.setItem('bluprint_last_create', Date.now().toString());
       
+      // Promo code'u yenile
       const promoRes = await fetch(`/api/promo?wallet=${publicKey.toString()}`);
       const promoData = await promoRes.json();
       if (promoData.success && promoData.promoCode) {
         setMyPromoCode(promoData.promoCode);
       }
+      
     } catch (err: any) {
       clearInterval(progressInterval.current!);
       console.error("Create token error:", err);
@@ -377,6 +510,8 @@ export default function CreatePageContent() {
         errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
+      } else if (err.message?.includes("0x0")) {
+        errorMessage = "Transaction simulation failed. Check your wallet balance and try again.";
       }
       
       setStatus(`❌ ${errorMessage}`);
@@ -396,8 +531,13 @@ export default function CreatePageContent() {
         time={time}
         onReset={() => {
           setSuccessData(null);
+          setTokenName("");
+          setTokenSymbol("");
+          setTokenSupply(1_000_000_000);
+          setTokenDecimals(9);
           setTokenImage("");
           setPreviewImage(null);
+          setDescription("");
           setRevokeMint(false);
           setRevokeFreeze(false);
           setRevokeUpdate(false);
@@ -463,36 +603,77 @@ export default function CreatePageContent() {
               <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_name_label")}</label>
-                  <input type="text" value={tokenName} onChange={(e) => setTokenName(e.target.value)} placeholder={t("create_name_placeholder")} className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <input 
+                    type="text" 
+                    value={tokenName} 
+                    onChange={(e) => setTokenName(e.target.value)} 
+                    placeholder={t("create_name_placeholder")} 
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                  />
                 </div>
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_symbol_label")}</label>
-                  <input type="text" value={tokenSymbol} onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())} placeholder={t("create_symbol_placeholder")} className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white focus:ring-2 focus:ring-blue-500 outline-none uppercase" />
+                  <input 
+                    type="text" 
+                    value={tokenSymbol} 
+                    onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())} 
+                    placeholder={t("create_symbol_placeholder")} 
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white focus:ring-2 focus:ring-blue-500 outline-none uppercase" 
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_supply_label")}</label>
-                  <input type="number" value={tokenSupply} onChange={(e) => setTokenSupply(Number(e.target.value))} className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none" />
+                  <input 
+                    type="number" 
+                    value={tokenSupply} 
+                    onChange={(e) => setTokenSupply(Number(e.target.value))} 
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none" 
+                  />
                 </div>
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_decimals_label")}</label>
-                  <input type="number" value={tokenDecimals} onChange={(e) => setTokenDecimals(Number(e.target.value))} className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none" />
+                  <input 
+                    type="number" 
+                    value={tokenDecimals} 
+                    onChange={(e) => setTokenDecimals(Number(e.target.value))} 
+                    className="w-full h-11 sm:h-12 px-3 sm:px-4 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none" 
+                  />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_logo_label")}</label>
-                <div className="border-2 border-dashed border-gray-600 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-blue-500 transition bg-gray-800/30" onClick={() => fileInputRef.current?.click()}>
-                  {previewImage ? <img src={previewImage} alt="Preview" className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-xl object-cover" /> : <div className="text-gray-400 text-sm">{t("create_logo_placeholder")}</div>}
-                  <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={handleFileUpload} className="hidden" />
+                <div 
+                  className="border-2 border-dashed border-gray-600 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-blue-500 transition bg-gray-800/30" 
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {previewImage ? (
+                    <img src={previewImage} alt="Preview" className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-xl object-cover" />
+                  ) : (
+                    <div className="text-gray-400 text-sm">
+                      <div className="text-2xl mb-1">🖼️</div>
+                      {t("create_logo_placeholder")}
+                    </div>
+                  )}
+                  <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" onChange={handleFileUpload} className="hidden" />
                 </div>
+                {tokenImage && (
+                  <p className="text-xs text-green-400 mt-1">✅ Logo uploaded to IPFS</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t("create_desc_label")}</label>
-                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("create_desc_placeholder")} className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none resize-none" />
+                <textarea 
+                  rows={3} 
+                  value={description} 
+                  onChange={(e) => setDescription(e.target.value)} 
+                  placeholder={t("create_desc_placeholder")} 
+                  className="w-full px-3 sm:px-4 py-3 text-sm border border-gray-700 rounded-xl bg-gray-800/50 text-white outline-none resize-none" 
+                />
               </div>
 
               {/* PROMO CODE INPUT */}
@@ -642,7 +823,11 @@ export default function CreatePageContent() {
               </AnimatePresence>
 
               {mounted && (
-                <button onClick={createToken} disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-xl transition-all duration-200 transform hover:scale-[1.02] text-sm sm:text-base">
+                <button 
+                  onClick={createToken} 
+                  disabled={loading || !tokenImage} 
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-xl transition-all duration-200 transform hover:scale-[1.02] text-sm sm:text-base"
+                >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -651,7 +836,7 @@ export default function CreatePageContent() {
                       </svg>
                       {t("create_deploying")}
                     </span>
-                  ) : !connected ? t("nav_connect") : t("create_button")}
+                  ) : !connected ? t("nav_connect") : !tokenImage ? "📸 Upload logo first" : t("create_button")}
                 </button>
               )}
 
