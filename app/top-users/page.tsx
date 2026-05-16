@@ -2,197 +2,246 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useWallet } from "@solana/wallet-adapter-react";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
 
-interface TopUser {
+interface User {
   wallet: string;
-  tier: string;
-  referrals: number;
-  tokensCreated: number;
-  totalEarned: number;
-  rank: number;
+  tokenCount: number;
+  referralCount: number;
+  tier?: "vip" | "premium" | null;
+  createdAt?: string;
 }
 
 export default function TopUsersPage() {
-  const [users, setUsers] = useState<TopUser[]>([]);
+  const { publicKey } = useWallet();
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeFrame, setTimeFrame] = useState<"all" | "weekly" | "monthly">("all");
+  const [timeframe, setTimeframe] = useState<"all" | "week" | "month">("all");
+  const [sortBy, setSortBy] = useState<"tokens" | "referrals">("tokens");
 
   useEffect(() => {
     fetchTopUsers();
-  }, []);
+  }, [timeframe, sortBy]);
 
   const fetchTopUsers = async () => {
+    setLoading(true);
     try {
-      // Mock data - will be replaced with real API
-      const mockUsers: TopUser[] = [
-        { wallet: "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x", tier: "vip", referrals: 156, tokensCreated: 23, totalEarned: 7.8, rank: 1 },
-        { wallet: "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc", tier: "vip", referrals: 98, tokensCreated: 15, totalEarned: 4.9, rank: 2 },
-        { wallet: "8x3k7jm9p2qL4r5t6y7u8i9o0p1a2s3d4f5g6h7j8k9", tier: "premium", referrals: 67, tokensCreated: 12, totalEarned: 3.35, rank: 3 },
-        { wallet: "5m9j2n4k6p8r0t2v4x6z8b0d2f4h6j8l0n2p4r6t8", tier: "premium", referrals: 45, tokensCreated: 8, totalEarned: 2.25, rank: 4 },
-        { wallet: "2n7k4t8r2v5x9c3f6h9l2o5r8u1x4m7q0w3e6r9t2", tier: "premium", referrals: 34, tokensCreated: 6, totalEarned: 1.7, rank: 5 },
-      ];
-      setUsers(mockUsers);
+      const res = await fetch(`/api/top-users?timeframe=${timeframe}&sort=${sortBy}`);
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.users);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch top users:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const shortenAddress = (address: string) => {
-    if (!address) return "";
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const shortenWallet = (wallet: string) => {
+    if (!wallet) return "";
+    return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
   };
 
-  const getTierBadge = (tier: string) => {
+  const getTierBadge = (tier?: string | null) => {
     if (tier === "vip") {
-      return <span className="text-yellow-500 text-sm">👑 VIP</span>;
+      return <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">👑 VIP</span>;
     }
-    return <span className="text-gray-400 text-sm">⭐ Premium</span>;
+    if (tier === "premium") {
+      return <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">⭐ PREMIUM</span>;
+    }
+    return null;
   };
-
-  const getRankIcon = (rank: number) => {
-    if (rank === 1) return "🥇";
-    if (rank === 2) return "🥈";
-    if (rank === 3) return "🥉";
-    return `${rank}`;
-  };
-
-  if (loading) {
-    return (
-      <PageTransition>
-        <div className="min-h-screen bg-gray-950">
-          <div className="flex items-center justify-center h-screen">
-            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-          </div>
-        </div>
-      </PageTransition>
-    );
-  }
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-gray-950">
-        <div className="pt-6 px-6">
+      <div className="relative min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+        <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:50px_50px]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        
+        <div className="relative z-10 pt-20 sm:pt-28 max-w-6xl mx-auto px-3 sm:px-4 pb-16">
           
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-white">🏆 Top Users</h1>
-              <p className="text-gray-500 text-sm">Leaderboard by referrals and activity</p>
-            </div>
+          <div className="text-center mb-10">
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent"
+            >
+              🏆 Top Users
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-gray-400 mt-3"
+            >
+              Most active token creators on BluPrint
+            </motion.p>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
             <div className="flex gap-2">
               <button
-                onClick={() => setTimeFrame("all")}
-                className={`px-3 py-1.5 text-sm rounded-lg transition ${
-                  timeFrame === "all" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+                onClick={() => setTimeframe("all")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  timeframe === "all" 
+                    ? "bg-blue-600 text-white" 
+                    : "bg-gray-800/50 text-gray-400 hover:bg-gray-800"
                 }`}
               >
                 All Time
               </button>
               <button
-                onClick={() => setTimeFrame("weekly")}
-                className={`px-3 py-1.5 text-sm rounded-lg transition ${
-                  timeFrame === "weekly" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+                onClick={() => setTimeframe("week")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  timeframe === "week" 
+                    ? "bg-blue-600 text-white" 
+                    : "bg-gray-800/50 text-gray-400 hover:bg-gray-800"
                 }`}
               >
                 This Week
               </button>
               <button
-                onClick={() => setTimeFrame("monthly")}
-                className={`px-3 py-1.5 text-sm rounded-lg transition ${
-                  timeFrame === "monthly" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+                onClick={() => setTimeframe("month")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  timeframe === "month" 
+                    ? "bg-blue-600 text-white" 
+                    : "bg-gray-800/50 text-gray-400 hover:bg-gray-800"
                 }`}
               >
                 This Month
               </button>
             </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSortBy("tokens")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  sortBy === "tokens" 
+                    ? "bg-purple-600 text-white" 
+                    : "bg-gray-800/50 text-gray-400 hover:bg-gray-800"
+                }`}
+              >
+                🔥 Most Tokens
+              </button>
+              <button
+                onClick={() => setSortBy("referrals")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  sortBy === "referrals" 
+                    ? "bg-purple-600 text-white" 
+                    : "bg-gray-800/50 text-gray-400 hover:bg-gray-800"
+                }`}
+              >
+                👥 Most Referrals
+              </button>
+            </div>
           </div>
 
-          {/* Stats Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gradient-to-r from-yellow-600/20 to-yellow-500/10 rounded-xl border border-yellow-500/30 p-4">
-              <div className="text-2xl mb-1">👑</div>
-              <div className="text-2xl font-bold text-white">{users.filter(u => u.tier === "vip").length}</div>
-              <div className="text-xs text-gray-400">VIP Members</div>
+          {/* Leaderboard */}
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500" />
             </div>
-            <div className="bg-gradient-to-r from-blue-600/20 to-blue-500/10 rounded-xl border border-blue-500/30 p-4">
-              <div className="text-2xl mb-1">⭐</div>
-              <div className="text-2xl font-bold text-white">{users.filter(u => u.tier === "premium").length}</div>
-              <div className="text-xs text-gray-400">Premium Members</div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-20 text-gray-500">
+              No users found
             </div>
-            <div className="bg-gradient-to-r from-green-600/20 to-green-500/10 rounded-xl border border-green-500/30 p-4">
-              <div className="text-2xl mb-1">💰</div>
-              <div className="text-2xl font-bold text-white">{users.reduce((sum, u) => sum + u.totalEarned, 0).toFixed(1)} SOL</div>
-              <div className="text-xs text-gray-400">Total Referral Earnings</div>
-            </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {users.map((user, index) => (
+                <motion.div
+                  key={user.wallet}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.03 }}
+                  className={`group relative bg-gray-800/40 backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-blue-500/30 transition-all duration-300 ${
+                    publicKey?.toString() === user.wallet ? "border-blue-500/50 bg-blue-500/5" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between p-4">
+                    {/* Rank */}
+                    <div className="flex items-center gap-4 w-16">
+                      <span className={`text-2xl font-bold ${
+                        index === 0 ? "text-yellow-400" :
+                        index === 1 ? "text-gray-300" :
+                        index === 2 ? "text-orange-400" :
+                        "text-gray-600"
+                      }`}>
+                        #{index + 1}
+                      </span>
+                    </div>
 
-          {/* Leaderboard Table */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-800 border-b border-gray-700">
-                  <tr>
-                    <th className="p-4 text-left text-xs font-mono text-gray-400">RANK</th>
-                    <th className="p-4 text-left text-xs font-mono text-gray-400">USER</th>
-                    <th className="p-4 text-left text-xs font-mono text-gray-400">TIER</th>
-                    <th className="p-4 text-right text-xs font-mono text-gray-400">REFERRALS</th>
-                    <th className="p-4 text-right text-xs font-mono text-gray-400">TOKENS</th>
-                    <th className="p-4 text-right text-xs font-mono text-gray-400">EARNED (SOL)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user, idx) => (
-                    <motion.tr
-                      key={user.wallet}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="border-b border-gray-800 hover:bg-gray-800/50 transition"
-                    >
-                      <td className="p-4">
+                    {/* User Info */}
+                    <div className="flex-1 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
+                        {index + 1}
+                      </div>
+                      <div>
                         <div className="flex items-center gap-2">
-                          {user.rank === 1 && <span className="text-2xl">🥇</span>}
-                          {user.rank === 2 && <span className="text-2xl">🥈</span>}
-                          {user.rank === 3 && <span className="text-2xl">🥉</span>}
-                          {user.rank > 3 && <span className="text-gray-400 font-mono">#{user.rank}</span>}
+                          <span className="font-mono text-white font-medium">
+                            {shortenWallet(user.wallet)}
+                          </span>
+                          {getTierBadge(user.tier)}
+                          {publicKey?.toString() === user.wallet && (
+                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                              You
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td className="p-4">
-                        <div>
-                          <div className="font-mono text-sm text-white">{shortenAddress(user.wallet)}</div>
-                          {user.rank === 1 && <div className="text-xs text-yellow-500">🏆 Top Referrer</div>}
+                        <div className="flex gap-3 mt-1 text-xs text-gray-500">
+                          <span>Joined: {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}</span>
                         </div>
-                      </td>
-                      <td className="p-4">{getTierBadge(user.tier)}</td>
-                      <td className="p-4 text-right">
-                        <span className="text-green-500 font-mono font-bold">{user.referrals}</span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="text-blue-400 font-mono">{user.tokensCreated}</span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="text-yellow-500 font-mono">{user.totalEarned.toFixed(2)} SOL</span>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="flex gap-6">
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-white">{user.tokenCount}</div>
+                        <div className="text-xs text-gray-500">Tokens</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-green-400">{user.referralCount}</div>
+                        <div className="text-xs text-gray-500">Referrals</div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-          </div>
+          )}
 
-          {/* Call to Action */}
-          <div className="mt-6 bg-gradient-to-r from-blue-600/10 to-purple-600/10 rounded-xl border border-blue-500/30 p-6 text-center">
-            <h3 className="text-lg font-semibold text-white">Want to be on top?</h3>
-            <p className="text-gray-400 text-sm mt-1">Create tokens and invite friends to climb the leaderboard!</p>
-            <a href="/create" className="inline-block mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">
-              Create Token Now
-            </a>
-          </div>
-
+          {/* Your Stats (if wallet connected) */}
+          {publicKey && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8 p-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/30"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-gray-400">Your Rank</div>
+                  <div className="text-2xl font-bold text-white">
+                    #{users.findIndex(u => u.wallet === publicKey.toString()) + 1 || "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-400">Your Tokens</div>
+                  <div className="text-2xl font-bold text-white">
+                    {users.find(u => u.wallet === publicKey.toString())?.tokenCount || 0}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-400">Your Referrals</div>
+                  <div className="text-2xl font-bold text-green-400">
+                    {users.find(u => u.wallet === publicKey.toString())?.referralCount || 0}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </div>
         <Footer />
       </div>
