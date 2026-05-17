@@ -120,13 +120,13 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar - top-10 yerine top-5 yapıldı */}
-      <aside className="fixed left-0 top-5 h-full w-56 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 z-40 hidden md:flex flex-col">
+      {/* Desktop Sidebar - top-0 bottom-0 ile tam yapıştır */}
+      <aside className="fixed left-0 top-0 bottom-0 w-56 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 z-40 hidden md:flex flex-col">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Header - top-10 yerine top-5 yapıldı */}
-      <div className="fixed top-5 left-0 right-0 z-30 md:hidden bg-gray-900/95 backdrop-blur-xl border-b border-gray-800">
+      {/* Mobile Header - top-0 ile yapıştır */}
+      <div className="fixed top-0 left-0 right-0 z-30 md:hidden bg-gray-900/95 backdrop-blur-xl border-b border-gray-800">
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
