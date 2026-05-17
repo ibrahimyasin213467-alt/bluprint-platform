@@ -1,7 +1,27 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
-import { getTranslation, type Locale, defaultLocale, locales } from "./i18n";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+
+export type Locale = "en" | "tr" | "zh" | "ru";  // ✅ export edildi
+
+type Translations = {
+  [key: string]: string;
+};
+
+const translations: Record<Locale, Translations> = {
+  en: {
+    // ... mevcut çevirilerin
+  },
+  tr: {
+    // ... mevcut çevirilerin
+  },
+  zh: {
+    // ... mevcut çevirilerin
+  },
+  ru: {
+    // ... mevcut çevirilerin
+  },
+};
 
 interface I18nContextType {
   locale: Locale;
@@ -11,43 +31,36 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-export function useI18n() {
-  const context = useContext(I18nContext);
-  // Provider dışında çağrılırsa hata fırlatma, boş fonksiyon döndür
-  if (!context) {
-    console.warn("useI18n called outside I18nProvider - using fallback");
-    return {
-      locale: defaultLocale,
-      setLocale: () => {},
-      t: (key: string) => key,
-    };
-  }
-  return context;
-}
-
-export default function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  const [mounted, setMounted] = useState(false);
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocale] = useState<Locale>("en");
 
   useEffect(() => {
     const saved = localStorage.getItem("locale") as Locale;
-    if (saved && locales.includes(saved)) {
+    if (saved && ["en", "tr", "zh", "ru"].includes(saved)) {
       setLocale(saved);
     }
-    setMounted(true);
   }, []);
 
-  const t = (key: string): string => {
-    return getTranslation(locale, key);
+  const handleSetLocale = (newLocale: Locale) => {
+    setLocale(newLocale);
+    localStorage.setItem("locale", newLocale);
   };
 
-  if (!mounted) {
-    return <>{children}</>;
-  }
+  const t = (key: string): string => {
+    return translations[locale][key] || key;
+  };
 
   return (
-    <I18nContext.Provider value={{ locale, setLocale, t }}>
+    <I18nContext.Provider value={{ locale, setLocale: handleSetLocale, t }}>
       {children}
     </I18nContext.Provider>
   );
+}
+
+export function useI18n() {
+  const context = useContext(I18nContext);
+  if (!context) {
+    throw new Error("useI18n must be used within an I18nProvider");
+  }
+  return context;
 }
