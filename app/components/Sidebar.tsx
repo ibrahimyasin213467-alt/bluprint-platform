@@ -88,26 +88,35 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Wallet & Settings - padding azaltıldı, daha yukarı */}
-      <div className="px-3 py-3 border-t border-gray-800 space-y-2">
+      {/* Wallet & Settings - YUKARI KAYDIRILDI */}
+      <div className="px-3 pt-2 pb-4 border-t border-gray-800 space-y-2.5">
+        {/* Connect Wallet Butonu */}
         <button
           onClick={handleWalletClick}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-800/50 hover:bg-gray-800 transition text-sm"
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-green-600/20 to-green-500/10 border border-green-500/30 hover:from-green-600/30 hover:to-green-500/20 transition-all duration-200"
         >
-          <div className="w-6 h-6 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center">
+          <div className="w-6 h-6 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg">
             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
               <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1z" clipRule="evenodd" />
             </svg>
           </div>
-          <span className="text-gray-300 text-sm truncate">
+          <span className="text-gray-200 text-sm font-medium truncate">
             {connected && publicKey ? shortenAddress(publicKey.toString()) : "Connect Wallet"}
           </span>
+          {connected && (
+            <span className="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          )}
         </button>
         
-        <div className="flex items-center justify-between px-1">
-          <ThemeToggle />
-          <LanguageSwitcher />
+        {/* Theme & Language - YANYANA */}
+        <div className="flex items-center justify-between gap-2 px-1 py-1.5">
+          <div className="flex-1">
+            <ThemeToggle />
+          </div>
+          <div className="flex-1">
+            <LanguageSwitcher />
+          </div>
         </div>
       </div>
     </>
