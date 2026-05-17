@@ -11,6 +11,7 @@ interface Token {
   name: string;
   symbol: string;
   image?: string;
+  balance?: number;
 }
 
 export default function BoostSection() {
@@ -36,8 +37,9 @@ export default function BoostSection() {
   }, [connected, publicKey]);
 
   const fetchUserTokens = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`/api/tokens?user=${publicKey?.toString()}`);
+      const res = await fetch(`/api/user-tokens?wallet=${publicKey?.toString()}`);
       const data = await res.json();
       if (data.success && data.tokens && data.tokens.length > 0) {
         setHasToken(true);
@@ -49,6 +51,8 @@ export default function BoostSection() {
     } catch (err) {
       console.error("Failed to fetch user tokens:", err);
       setHasToken(false);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,7 +63,7 @@ export default function BoostSection() {
     }
 
     if (!hasToken || userTokens.length === 0) {
-      showToast("You need to create a token first!", "warning");
+      showToast("You don't have any tokens in your wallet!", "warning");
       return;
     }
 
@@ -69,7 +73,6 @@ export default function BoostSection() {
     }
 
     setIsBoosting(true);
-    setLoading(true);
 
     try {
       const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
@@ -114,7 +117,6 @@ export default function BoostSection() {
       console.error("Boost error:", error);
       showToast(`❌ Boost failed: ${error.message}`, "error");
     } finally {
-      setLoading(false);
       setIsBoosting(false);
     }
   };
@@ -212,13 +214,21 @@ export default function BoostSection() {
                 ))}
               </div>
 
-              {/* Token Selection - Sadece token'ı olanlara göster */}
-              {connected && hasToken && userTokens.length > 0 && (
+              {/* Token Selection - Loading */}
+              {loading && connected && (
+                <div className="mb-6 text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-blue-500 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">Scanning your wallet...</p>
+                </div>
+              )}
+
+              {/* Token Selection - Kullanıcının cüzdanındaki token'lar */}
+              {!loading && connected && hasToken && userTokens.length > 0 && (
                 <div className="mb-6">
-                  <label className="block text-sm text-gray-400 mb-2 text-center">
-                    Select your token to boost:
+                  <label className="block text-sm text-gray-400 mb-3 text-center">
+                    Select a token from your wallet to boost:
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto px-1">
                     {userTokens.map((token) => (
                       <button
                         key={token.mint}
@@ -232,16 +242,19 @@ export default function BoostSection() {
                         {token.image ? (
                           <img src={token.image} alt={token.symbol} className="w-8 h-8 rounded-full" />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-sm">
-                            🚀
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-sm text-white">
+                            {token.symbol?.charAt(0) || "?"}
                           </div>
                         )}
-                        <div className="text-left">
+                        <div className="text-left flex-1">
                           <div className="font-semibold text-white text-sm">{token.name}</div>
                           <div className="text-xs text-gray-400">{token.symbol}</div>
                         </div>
+                        {token.balance && (
+                          <div className="text-xs text-gray-500">{token.balance.toFixed(2)}</div>
+                        )}
                         {selectedToken?.mint === token.mint && (
-                          <div className="ml-auto text-blue-400">✓</div>
+                          <div className="text-blue-400 text-sm ml-2">✓</div>
                         )}
                       </button>
                     ))}
@@ -249,14 +262,14 @@ export default function BoostSection() {
                 </div>
               )}
 
-              {/* Token'ı olmayanlara mesaj */}
-              {connected && !hasToken && (
+              {/* Cüzdanda token yoksa */}
+              {!loading && connected && !hasToken && (
                 <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-center">
                   <p className="text-yellow-400 text-sm">
-                    ⚠️ You haven't created any tokens yet.
+                    ⚠️ No tokens found in your wallet.
                   </p>
                   <p className="text-gray-400 text-xs mt-1">
-                    Create a token first to boost it!
+                    Create a token first or add tokens to your wallet to boost them!
                   </p>
                 </div>
               )}
@@ -279,10 +292,10 @@ export default function BoostSection() {
                     isBoosting ||
                     loading
                   }
-                  className="relative group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="relative group/btn disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                 >
                   <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl blur opacity-0 group-hover/btn:opacity-100 transition duration-300" />
-                  <div className="relative px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-xl text-white font-bold text-sm sm:text-base transition-all duration-200 shadow-lg shadow-blue-500/25 flex items-center gap-2">
+                  <div className="relative px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-xl text-white font-bold text-sm sm:text-base transition-all duration-200 shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2">
                     {isBoosting ? (
                       <>
                         <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -297,8 +310,10 @@ export default function BoostSection() {
                         <span>
                           {!connected
                             ? "Connect Wallet"
+                            : loading
+                            ? "Scanning..."
                             : !hasToken
-                            ? "Create Token First"
+                            ? "No Tokens Found"
                             : !selectedToken
                             ? "Select a Token"
                             : "Boost Now"}
