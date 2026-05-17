@@ -1,38 +1,63 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useI18n } from "../lib/i18n-provider";
 
 export default function WhyBluPrint() {
-  const { t } = useI18n();
-
   const features = [
-    { icon: "⚡", title: t('why_instant'), desc: t('why_instant_desc') },
-    { icon: "🔒", title: t('why_security'), desc: t('why_security_desc') },
-    { icon: "🧠", title: t('why_nocode'), desc: t('why_nocode_desc') },
+    {
+      icon: "⚡",
+      title: "Instant Launch",
+      description: "Deploy your token in seconds."
+    },
+    {
+      icon: "🔒",
+      title: "Built-In Security",
+      description: "Mint and freeze authority options included."
+    },
+    {
+      icon: "🧠",
+      title: "No-Code Experience",
+      description: "No developers needed."
+    }
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      viewport={{ once: true }}
-      className="text-center mb-24"
-    >
-      <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-        {t('why_title')}
-      </h2>
-      <p className="text-gray-500 dark:text-gray-400 mb-12">{t('why_subtitle')}</p>
-      <div className="grid md:grid-cols-3 gap-8">
-        {features.map((f, i) => (
-          <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="text-5xl mb-4">{f.icon}</div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{f.title}</h3>
-            <p className="text-gray-500 dark:text-gray-400">{f.desc}</p>
-          </div>
+    <section className="py-16">
+      <div className="text-center mb-12">
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-white to-blue-400 bg-clip-text text-transparent"
+        >
+          Why BluPrint?
+        </motion.h2>
+        <motion.p 
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-gray-400 mt-3"
+        >
+          A fast and simple way to launch on Solana.
+        </motion.p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {features.map((feature, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: index * 0.1 }}
+            className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300"
+          >
+            <div className="text-4xl mb-4">{feature.icon}</div>
+            <h3 className="text-xl font-semibold text-white mb-2">{feature.title}</h3>
+            <p className="text-gray-400 text-sm">{feature.description}</p>
+          </motion.div>
         ))}
       </div>
-    </motion.div>
+    </section>
   );
 }
