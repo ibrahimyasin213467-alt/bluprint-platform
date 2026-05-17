@@ -26,48 +26,49 @@ export default function Background() {
     let mouseX = 0;
     let mouseY = 0;
 
-    // CREATE SAYFASI RENKLERİ (LOŞ, SAKİN PEMBE)
+    // CREATE SAYFASI - SÖNÜK PEMBE (opacity'ler çok düşük)
     const createPageColors = {
       gradientStart: "#0a0a0f",
-      gradientMid: "#140a14",
+      gradientMid: "#120a15",
       gradientEnd: "#0a0a0f",
-      gridColor: "rgba(236, 72, 153, 0.04)",
-      dotColor: "rgba(236, 72, 153, 0.05)",
-      orbColor1: "rgba(236, 72, 153, 0.04)",
-      orbColor2: "rgba(219, 39, 119, 0.03)",
-      orbColor3: "rgba(244, 114, 182, 0.03)",
-      particleColor: "rgba(236, 72, 153, 0.06)"
+      gridColor: "rgba(236, 72, 153, 0.02)",
+      dotColor: "rgba(236, 72, 153, 0.03)",
+      orbColor1: "rgba(236, 72, 153, 0.02)",
+      orbColor2: "rgba(219, 39, 119, 0.015)",
+      orbColor3: "rgba(244, 114, 182, 0.015)",
+      particleColor: "rgba(236, 72, 153, 0.02)"
     };
 
-    // ANA SAYFA RENKLERİ (MAVİ/MOR)
+    // ANA SAYFA - MAVİ/MOR
     const mainPageColors = {
       gradientStart: "#0a0f1a",
       gradientMid: "#0f172a",
       gradientEnd: "#1e1b4b",
-      gridColor: "rgba(59, 130, 246, 0.08)",
-      dotColor: "rgba(59, 130, 246, 0.1)",
-      orbColor1: "rgba(59, 130, 246, 0.12)",
-      orbColor2: "rgba(139, 92, 246, 0.08)",
-      orbColor3: "rgba(56, 189, 248, 0.06)",
-      particleColor: "rgba(59, 130, 246, 0.12)"
+      gridColor: "rgba(59, 130, 246, 0.06)",
+      dotColor: "rgba(59, 130, 246, 0.08)",
+      orbColor1: "rgba(59, 130, 246, 0.08)",
+      orbColor2: "rgba(139, 92, 246, 0.06)",
+      orbColor3: "rgba(56, 189, 248, 0.04)",
+      particleColor: "rgba(59, 130, 246, 0.08)"
     };
 
     const colors = isCreatePage ? createPageColors : mainPageColors;
 
+    // ARKAPLAN GRADIENT
     const drawGradient = () => {
       const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       gradient.addColorStop(0, colors.gradientStart);
-      gradient.addColorStop(0.3, colors.gradientMid);
-      gradient.addColorStop(0.6, colors.gradientEnd);
-      gradient.addColorStop(1, colors.gradientStart);
+      gradient.addColorStop(0.5, colors.gradientMid);
+      gradient.addColorStop(1, colors.gradientEnd);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     };
 
+    // GRID ÇİZGİLERİ
     const drawGrid = () => {
       const gridSize = 50;
       ctx.strokeStyle = colors.gridColor;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.5;
       
       for (let x = 0; x < canvas.width; x += gridSize) {
         ctx.beginPath();
@@ -84,11 +85,12 @@ export default function Background() {
       }
     };
 
+    // NOKTA DESENİ
     const drawDots = () => {
-      const spacing = 40;
+      const spacing = 45;
       for (let x = spacing; x < canvas.width; x += spacing) {
         for (let y = spacing; y < canvas.height; y += spacing) {
-          const opacity = Math.random() * 0.2 + 0.05;
+          const opacity = Math.random() * 0.15 + 0.02;
           
           if (isCreatePage) {
             ctx.fillStyle = `rgba(236, 72, 153, ${opacity})`;
@@ -97,48 +99,38 @@ export default function Background() {
           }
           
           ctx.beginPath();
-          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+          ctx.arc(x, y, 1.2, 0, Math.PI * 2);
           ctx.fill();
-          
-          if (Math.random() > 0.85) {
-            if (isCreatePage) {
-              ctx.fillStyle = `rgba(219, 39, 119, ${opacity * 0.6})`;
-            } else {
-              ctx.fillStyle = `rgba(139, 92, 246, ${opacity * 0.6})`;
-            }
-            ctx.beginPath();
-            ctx.arc(x, y, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
         }
       }
     };
 
+    // IŞIK ORBLARI
     const drawLightOrbs = () => {
-      // Orb 1
+      // Orb 1 - sol üst
       const gradient1 = ctx.createRadialGradient(
         canvas.width * 0.2, canvas.height * 0.3, 0,
-        canvas.width * 0.2, canvas.height * 0.3, canvas.width * 0.4
+        canvas.width * 0.2, canvas.height * 0.3, canvas.width * 0.35
       );
       gradient1.addColorStop(0, colors.orbColor1);
       gradient1.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = gradient1;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Orb 2
+      // Orb 2 - sağ alt
       const gradient2 = ctx.createRadialGradient(
         canvas.width * 0.8, canvas.height * 0.7, 0,
-        canvas.width * 0.8, canvas.height * 0.7, canvas.width * 0.5
+        canvas.width * 0.8, canvas.height * 0.7, canvas.width * 0.4
       );
       gradient2.addColorStop(0, colors.orbColor2);
       gradient2.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = gradient2;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Mouse takipli orb
+      // Orb 3 - fare takipli
       const gradient3 = ctx.createRadialGradient(
         mouseX, mouseY, 0,
-        mouseX, mouseY, 180
+        mouseX, mouseY, 150
       );
       gradient3.addColorStop(0, colors.orbColor3);
       gradient3.addColorStop(1, "rgba(0,0,0,0)");
@@ -146,16 +138,17 @@ export default function Background() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     };
 
+    // PARTİKÜLLER (yukarı hareket eden)
     const initParticles = () => {
-      const particleCount = Math.min(60, Math.floor(window.innerWidth / 25));
+      const particleCount = Math.min(40, Math.floor(window.innerWidth / 30));
       particles = [];
       for (let i = 0; i < particleCount; i++) {
         particles.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
-          radius: Math.random() * 2 + 1,
-          speed: Math.random() * 0.3 + 0.1,
-          alpha: Math.random() * 0.15 + 0.05,
+          radius: Math.random() * 1.5 + 0.5,
+          speed: Math.random() * 0.2 + 0.05,
+          alpha: Math.random() * 0.1 + 0.02,
         });
       }
     };
@@ -183,8 +176,9 @@ export default function Background() {
       }
     };
 
+    // ALTIGEN DESENİ
     const drawHexagons = () => {
-      const hexSize = 60;
+      const hexSize = 70;
       const hexWidth = hexSize * Math.sqrt(3);
       const hexHeight = hexSize * 2;
       
@@ -192,8 +186,8 @@ export default function Background() {
         for (let y = -hexSize; y < canvas.height + hexSize; y += hexHeight * 0.75) {
           const offset = (Math.floor(x / hexWidth) % 2) * (hexHeight / 2);
           
-          ctx.strokeStyle = isCreatePage ? "rgba(236, 72, 153, 0.02)" : "rgba(59, 130, 246, 0.03)";
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = isCreatePage ? "rgba(236, 72, 153, 0.01)" : "rgba(59, 130, 246, 0.02)";
+          ctx.lineWidth = 0.5;
           
           ctx.beginPath();
           for (let i = 0; i < 6; i++) {
@@ -248,14 +242,14 @@ export default function Background() {
       <div className="fixed top-0 left-0 w-full h-full -z-10 pointer-events-none">
         {isCreatePage ? (
           <>
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/4 rounded-full blur-3xl animate-pulse delay-1000" />
-            <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-pink-400/3 rounded-full blur-3xl animate-pulse delay-500" />
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-500/[0.02] rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/[0.015] rounded-full blur-3xl animate-pulse delay-1000" />
+            <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-pink-400/[0.01] rounded-full blur-3xl animate-pulse delay-500" />
           </>
         ) : (
           <>
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/8 rounded-full blur-3xl animate-pulse delay-1000" />
             <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl animate-pulse delay-500" />
           </>
         )}
