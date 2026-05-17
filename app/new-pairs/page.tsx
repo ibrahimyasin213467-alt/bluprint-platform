@@ -12,28 +12,26 @@ interface Token {
   volume24h?: number;
   liquidity?: number;
   priceChange24h?: number;
-  pairAddress?: string;
-  dexUrl?: string;
+  createdAt?: string;
   dex?: string;
 }
 
 export default function NewPairsPage() {
-  const [activeTab, setActiveTab] = useState<"bluprint" | "market">("bluprint");
+  const [activeTab, setActiveTab] = useState<"bluprint" | "jupiter">("bluprint");
   const [bluprintTokens, setBluprintTokens] = useState<Token[]>([]);
-  const [marketTokens, setMarketTokens] = useState<Token[]>([]);
+  const [jupiterTokens, setJupiterTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
-  const [marketLoading, setMarketLoading] = useState(false);
-  const [filter, setFilter] = useState<"trending" | "volume" | "new">("trending");
+  const [jupiterLoading, setJupiterLoading] = useState(false);
 
   useEffect(() => {
     fetchBluprintTokens();
   }, []);
 
   useEffect(() => {
-    if (activeTab === "market") {
-      fetchMarketTokens();
+    if (activeTab === "jupiter") {
+      fetchJupiterTokens();
     }
-  }, [activeTab, filter]);
+  }, [activeTab]);
 
   const fetchBluprintTokens = async () => {
     setLoading(true);
@@ -54,22 +52,21 @@ export default function NewPairsPage() {
     }
   };
 
-  const fetchMarketTokens = async () => {
-    setMarketLoading(true);
+  const fetchJupiterTokens = async () => {
+    setJupiterLoading(true);
     try {
-      let url = "/api/dex-screener?filter=" + filter;
-      const res = await fetch(url);
+      const res = await fetch("/api/jupiter-tokens");
       const data = await res.json();
       if (data.success && data.tokens && data.tokens.length > 0) {
-        setMarketTokens(data.tokens.slice(0, 50));
+        setJupiterTokens(data.tokens.slice(0, 50));
       } else {
-        setMarketTokens([]);
+        setJupiterTokens([]);
       }
     } catch (err) {
       console.error(err);
-      setMarketTokens([]);
+      setJupiterTokens([]);
     } finally {
-      setMarketLoading(false);
+      setJupiterLoading(false);
     }
   };
 
@@ -104,7 +101,7 @@ export default function NewPairsPage() {
             <p className="text-gray-500 text-sm mt-1">Discover the latest tokens on Solana</p>
           </div>
 
-          {/* Tabs - BluPrint başta */}
+          {/* Tabs */}
           <div className="flex gap-1 mb-6 border-b border-gray-800">
             <button
               onClick={() => setActiveTab("bluprint")}
@@ -118,40 +115,19 @@ export default function NewPairsPage() {
               BluPrint Origin
             </button>
             <button
-              onClick={() => setActiveTab("market")}
+              onClick={() => setActiveTab("jupiter")}
               className={`flex items-center gap-2 px-6 py-2 text-sm font-medium transition-all duration-200 ${
-                activeTab === "market"
-                  ? "text-orange-400 border-b-2 border-orange-400"
+                activeTab === "jupiter"
+                  ? "text-purple-400 border-b-2 border-purple-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <span>🌍</span>
-              DexScreener
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none"/>
+              </svg>
+              Jupiter
             </button>
           </div>
-
-          {/* Filters (sadece market için) */}
-          {activeTab === "market" && (
-            <div className="flex gap-2 mb-6">
-              {[
-                { id: "trending", label: "🔥 Trending" },
-                { id: "volume", label: "💧 High Volume" },
-                { id: "new", label: "✨ New Pairs" },
-              ].map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setFilter(f.id as any)}
-                  className={`px-4 py-1.5 rounded-full text-xs transition-all duration-200 ${
-                    filter === f.id
-                      ? "bg-orange-600 text-white"
-                      : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Table Header */}
           <div className="hidden md:flex items-center gap-3 px-4 py-2 text-xs text-gray-500 border-b border-gray-800">
@@ -231,20 +207,20 @@ export default function NewPairsPage() {
             </div>
           )}
 
-          {/* Market Loading */}
-          {activeTab === "market" && marketLoading && (
+          {/* Jupiter Loading */}
+          {activeTab === "jupiter" && jupiterLoading && (
             <div className="flex justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-orange-500" />
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
             </div>
           )}
 
-          {/* Market List */}
-          {activeTab === "market" && !marketLoading && (
+          {/* Jupiter List */}
+          {activeTab === "jupiter" && !jupiterLoading && (
             <div className="divide-y divide-gray-800/50">
-              {marketTokens.length > 0 ? (
-                marketTokens.map((token, idx) => (
+              {jupiterTokens.length > 0 ? (
+                jupiterTokens.map((token, idx) => (
                   <div key={token.mint || idx} className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
-                    <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(token.dexUrl || `https://dexscreener.com/solana/${token.pairAddress}`, "_blank")}>
+                    <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
                       <div className="w-10 text-center">
                         <span className={`text-sm font-mono ${idx < 3 ? "text-yellow-500" : "text-gray-500"}`}>
                           #{idx + 1}
@@ -255,7 +231,7 @@ export default function NewPairsPage() {
                           {token.image ? (
                             <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center text-xs font-bold">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
                               ?
                             </div>
                           )}
@@ -267,8 +243,10 @@ export default function NewPairsPage() {
                       </div>
                       <div className="w-24">
                         <div className="flex items-center gap-1">
-                          <span>🌍</span>
-                          <span className="text-xs text-orange-400">DexScreener</span>
+                          <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none"/>
+                          </svg>
+                          <span className="text-xs text-purple-400">Jupiter</span>
                         </div>
                       </div>
                       <div className="flex-1 text-right">
@@ -285,7 +263,7 @@ export default function NewPairsPage() {
                       </div>
                       <div className="w-12 text-right">
                         <button className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-gray-500 hover:text-orange-400 text-sm">→</span>
+                          <span className="text-gray-500 hover:text-purple-400 text-sm">→</span>
                         </button>
                       </div>
                     </div>
@@ -293,9 +271,9 @@ export default function NewPairsPage() {
                 ))
               ) : (
                 <div className="text-center py-20 text-gray-500">
-                  <p>No tokens found from DexScreener</p>
+                  <p>No tokens found from Jupiter</p>
                   <button 
-                    onClick={() => fetchMarketTokens()}
+                    onClick={fetchJupiterTokens}
                     className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700"
                   >
                     Retry
