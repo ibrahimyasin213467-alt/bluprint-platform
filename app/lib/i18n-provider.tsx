@@ -76,6 +76,73 @@ const translations: Record<Locale, Translations> = {
     "usecase_exp": "Experimental Projects",
     "usecase_exp_desc": "Test new ideas instantly on Solana.",
     
+    // Create Page
+    "pool_title": "🎁 First 100 Tokens Special Offer! 🎁",
+    "pool_first": "Only",
+    "pool_tokens": "tokens left",
+    "create_title": "✨ Create Your Meme Coin",
+    "create_subtitle": "Deploy instantly on Solana",
+    "create_name_label": "Token Name",
+    "create_name_placeholder": "e.g., My Awesome Coin",
+    "create_symbol_label": "Token Symbol",
+    "create_symbol_placeholder": "e.g., MAC",
+    "create_supply_label": "Total Supply",
+    "create_decimals_label": "Decimals",
+    "create_logo_label": "Token Logo",
+    "create_logo_placeholder": "Click or drag image to upload",
+    "create_desc_label": "Description (optional)",
+    "create_desc_placeholder": "Describe your token...",
+    "create_launch": "⚡ LAUNCH TOKEN ⚡",
+    "create_first100": "First 100 Tokens Special",
+    "create_secure_label": "Secure Token",
+    "create_social_button": "Add Social Links",
+    "common_free": "FREE",
+    
+    // Referral Page
+    "ref_title": "💰 Referral Program",
+    "ref_desc": "Earn SOL by inviting your friends!",
+    "ref_total": "Total Earned",
+    "ref_unclaimed": "Unclaimed",
+    "ref_per": "per referral",
+    "ref_step1": "Share Your Code",
+    "ref_step1_desc": "Share your unique promo code with friends",
+    "ref_step2": "Friend Creates Token",
+    "ref_step2_desc": "When they create a token, you earn 0.05 SOL",
+    "ref_step3": "Get Paid",
+    "ref_step3_desc": "SOL is sent directly to your wallet instantly",
+    "ref_how_title": "How It Works",
+    
+    // Top Users
+    "top_users_title": "🏆 Top Users",
+    "top_users_subtitle": "Most active token creators on BluPrint",
+    "top_users_all_time": "All Time",
+    "top_users_week": "This Week",
+    "top_users_month": "This Month",
+    "top_users_most_tokens": "Most Tokens",
+    "top_users_most_referrals": "Most Referrals",
+    "top_users_rank": "Rank",
+    "top_users_user": "User",
+    "top_users_tokens": "Tokens",
+    "top_users_referrals": "Referrals",
+    "top_users_joined": "Joined",
+    "top_users_you": "You",
+    "top_users_your_rank": "Your Rank",
+    "top_users_your_tokens": "Your Tokens",
+    "top_users_your_referrals": "Your Referrals",
+    "top_users_no_users": "No users found",
+    
+    // New Pairs
+    "new_pairs_title": "New Pairs",
+    "new_pairs_subtitle": "Discover the latest tokens on Solana",
+    
+    // Live Feed
+    
+    "live_empty": "No activity yet",
+    "live_waiting": "Waiting for activity...",
+    "live_activity_created": "created token",
+    "live_activity_referral": "referred a friend",
+    "live_activity_vip": "registered for VIP",
+    
     // Boost Section
     "boost_title": "🚀 Boost Your Token",
     "boost_subtitle": "Get featured in the BluPrint launch feed and increase visibility instantly.",
@@ -85,17 +152,17 @@ const translations: Record<Locale, Translations> = {
     "boost_benefit1": "Featured in Launch Feed",
     "boost_benefit2": "Increased Visibility",
     "boost_benefit3": "More Discoverability",
+    "boost_active": "Active Boosts",
     
     // CTA
     "cta_title": "Ready to Launch Your Token?",
-    "cta_subtitle": "Join hundreds of creators who launched their meme coins on BluPrint",
+    "cta_subtitle": "Join creators who launched their meme coins on BluPrint",
     "cta_button": "Start Creating Now",
     
     // Footer
     "footer_rights": "All rights reserved",
     
     // Common
-    "common_free": "FREE",
     "common_close": "Close",
     
     // Messages
@@ -109,9 +176,12 @@ const translations: Record<Locale, Translations> = {
     "token_supply_error": "Supply must be between 1,000 and 10,000,000,000",
     "token_decimals_error": "Decimals must be between 0 and 9",
     "token_created": "Token created successfully!",
+    
+    // Featured
+    "featured_title": "🔥 Featured Tokens",
+    "featured_subtitle": "Trending tokens on BluPrint",
   },
   tr: {
-    // Navigation
     "nav_home": "Ana Sayfa",
     "nav_create": "Oluştur",
     "nav_new_pairs": "Yeni Pair'ler",
@@ -119,21 +189,15 @@ const translations: Record<Locale, Translations> = {
     "nav_live": "Canlı",
     "nav_top_users": "En İyiler",
     "nav_connect": "Cüzdan Bağla",
-    
-    // Hero
     "hero_title": "Solana Meme Coin'ini Oluştur",
     "hero_subtitle": "Saniyeler içinde token'ını başlat. Kod yok. Sadece yaratıcılık.",
     "hero_button": "Token Oluştur",
-    
-    // Feature Cards
     "feature_fast_title": "Hızlı Dağıtım",
     "feature_fast_desc": "Çoğu token 30 saniyeden kısa sürede dağıtılır",
     "feature_secure_title": "Güvenli Başlatma",
     "feature_secure_desc": "Oluşturma sırasında yetki kontrolleri dahildir",
     "feature_solana_title": "Solana Destekli",
     "feature_solana_desc": "Doğrudan Solana altyapısı üzerine inşa edilmiştir",
-    
-    // Why BluPrint
     "why_title": "Neden BluPrint?",
     "why_subtitle": "Solana'da token başlatmanın hızlı ve basit yolu.",
     "why_instant": "Anında Başlatma",
@@ -142,8 +206,6 @@ const translations: Record<Locale, Translations> = {
     "why_security_desc": "Mint ve freeze yetki seçenekleri dahildir.",
     "why_nocode": "Kodsuz Deneyim",
     "why_nocode_desc": "Geliştiriciye gerek yok.",
-    
-    // How It Works
     "how_title": "Nasıl Çalışır",
     "how_subtitle": "Token'ını üç basit adımda başlat.",
     "how_step1": "Token'ını Seç",
@@ -152,22 +214,16 @@ const translations: Record<Locale, Translations> = {
     "how_step2_desc": "Cüzdanın ile işlemi onayla.",
     "how_step3": "Başlat ve Paylaş",
     "how_step3_desc": "Token'ın Solana'da canlı! 🚀",
-    
-    // Live Experience
     "live_title": "Canlı Başlatma Deneyimi",
     "live_subtitle": "BluPrint'te token oluşturmanın ne kadar hızlı olduğunu gör.",
     "live_demo": "⚡ Dağıtım genellikle 30 saniyeden kısa sürer",
     "live_success": "✅ Token başarıyla oluşturuldu",
-    
-    // Trust Section
     "trust_title": "Güvenli Başlatmalar için Tasarlanmıştır",
     "trust_subtitle": "Solana token'larını güvenle başlat.",
     "trust_mint": "Mint Yetki Seçenekleri",
     "trust_freeze": "Freeze Yetki Seçenekleri",
     "trust_metadata": "Metadata Desteği",
     "trust_ipfs": "IPFS Yükleme Dahil",
-    
-    // Use Cases
     "usecase_title": "Her Yaratıcı için Mükemmel",
     "usecase_subtitle": "Ne inşa ediyor olursan ol, BluPrint kolaylaştırır.",
     "usecase_meme": "Meme Coin'ler",
@@ -176,30 +232,59 @@ const translations: Record<Locale, Translations> = {
     "usecase_community_desc": "Topluluk token'ını oluştur ve büyüt.",
     "usecase_exp": "Deneysel Projeler",
     "usecase_exp_desc": "Yeni fikirleri Solana'da anında test et.",
-    
-    // Boost Section
+    "pool_title": "🎁 İlk 100 Token'a Özel Fırsat! 🎁",
+    "pool_first": "Sadece",
+    "pool_tokens": "token kaldı",
+    "create_title": "✨ Meme Coin'ini Oluştur",
+    "create_subtitle": "Solana'da anında başlat",
+    "create_name_label": "Token Adı",
+    "create_name_placeholder": "ör: Müthiş Coin",
+    "create_symbol_label": "Token Sembolü",
+    "create_symbol_placeholder": "ör: MTC",
+    "create_supply_label": "Toplam Arz",
+    "create_decimals_label": "Ondalık",
+    "create_logo_label": "Token Logosu",
+    "create_logo_placeholder": "Resim yüklemek için tıkla",
+    "create_desc_label": "Açıklama (isteğe bağlı)",
+    "create_desc_placeholder": "Token'ını açıkla...",
+    "create_launch": "⚡ TOKEN BAŞLAT ⚡",
+    "create_first100": "İlk 100 Token'a Özel",
+    "create_secure_label": "Güvenli Token",
+    "create_social_button": "Sosyal Linkler Ekle",
+    "common_free": "ÜCRETSİZ",
+    "ref_title": "💰 Tavsiye Programı",
+    "ref_desc": "Arkadaşlarını davet ederek SOL kazan!",
+    "ref_total": "Toplam Kazanç",
+    "ref_unclaimed": "Alınmamış",
+    "ref_per": "tavsiye başına",
+    "ref_step1": "Kodunu Paylaş",
+    "ref_step1_desc": "Benzersiz promosyon kodunu arkadaşlarınla paylaş",
+    "ref_step2": "Arkadaşın Token Oluşturur",
+    "ref_step2_desc": "Token oluşturduklarında 0.05 SOL kazanırsın",
+    "ref_step3": "Ödemeni Al",
+    "ref_step3_desc": "SOL anında cüzdanına gönderilir",
+    "ref_how_title": "Nasıl Çalışır",
+    "top_users_title": "🏆 En İyi Kullanıcılar",
+    "top_users_subtitle": "BluPrint'te en çok token oluşturanlar",
+    "new_pairs_title": "Yeni Pair'ler",
+    "new_pairs_subtitle": "Solana'daki en yeni tokenları keşfet",
+    "live_empty": "Henüz aktivite yok",
+    "live_waiting": "Aktivite bekleniyor...",
+    "live_activity_created": "token oluşturdu",
+    "live_activity_referral": "arkadaşını tavsiye etti",
+    "live_activity_vip": "VIP kaydı yaptı",
     "boost_title": "🚀 Token'ını Öne Çıkar",
-    "boost_subtitle": "BluPrint başlatma akışında öne çık ve anında görünürlük kazan.",
+    "boost_subtitle": "Token'ının görünürlüğünü artır",
     "boost_price": "4 gün için 0.1 SOL",
     "boost_button": "Şimdi Boostla",
-    "boost_featured": "⭐ ÖNE ÇIKAN BAŞLATMA",
-    "boost_benefit1": "Başlatma Akışında Öne Çık",
-    "boost_benefit2": "Artan Görünürlük",
-    "boost_benefit3": "Daha Fazla Keşfedilme",
-    
-    // CTA
-    "cta_title": "Token'ını Başlatmaya Hazır mısın?",
+    "boost_active": "Aktif Boostlar",
+    "cta_title": "Token'ını Başlatmaya Hazır Mısın?",
     "cta_subtitle": "BluPrint'te meme coin'ini başlatan binlerce yaratıcıya katıl",
     "cta_button": "Hemen Başlat",
-    
-    // Footer
+    "featured_title": "🔥 Öne Çıkan Tokenlar",
+    "featured_subtitle": "BluPrint'te trend olan tokenlar",
     "footer_rights": "Tüm hakları saklıdır",
-    
-    // Common
-    "common_free": "ÜCRETSİZ",
     "common_close": "Kapat",
-    
-    // Messages
     "uploading_logo": "Logo yükleniyor...",
     "logo_uploaded": "Logo yüklendi!",
     "referral_link_detected": "Tavsiye linki algılandı! 0.02 SOL tasarruf edeceksin",
@@ -212,7 +297,6 @@ const translations: Record<Locale, Translations> = {
     "token_created": "Token başarıyla oluşturuldu!",
   },
   zh: {
-    // Navigation
     "nav_home": "首页",
     "nav_create": "创建",
     "nav_new_pairs": "新交易对",
@@ -220,54 +304,36 @@ const translations: Record<Locale, Translations> = {
     "nav_live": "直播",
     "nav_top_users": "顶级用户",
     "nav_connect": "连接钱包",
-    
-    // Feature Cards
     "feature_fast_title": "快速部署",
     "feature_fast_desc": "大多数代币在30秒内完成部署",
     "feature_secure_title": "安全启动",
     "feature_secure_desc": "创建过程中包含权限控制",
     "feature_solana_title": "Solana驱动",
     "feature_solana_desc": "直接构建在Solana基础设施上",
-    
-    // Why BluPrint
-    "why_title": "为什么选择 BluPrint？",
-    "why_subtitle": "在 Solana 上快速简便地启动代币。",
-    "why_instant": "即时启动",
-    "why_instant_desc": "几秒内部署您的代币。",
-    "why_security": "内置安全",
-    "why_security_desc": "包含铸造和冻结权限选项。",
-    "why_nocode": "无代码体验",
-    "why_nocode_desc": "无需开发人员。",
-    
-    // How It Works
-    "how_title": "如何运作",
-    "how_subtitle": "三个简单步骤启动您的代币。",
-    "how_step1": "选择您的代币",
-    "how_step1_desc": "设置代币名称、符号和标志。",
-    "how_step2": "确认交易",
-    "how_step2_desc": "用您的钱包确认交易。",
-    "how_step3": "启动并分享",
-    "how_step3_desc": "您的代币已在 Solana 上线！🚀",
-    
-    // Boost Section
-    "boost_title": "🚀 推广您的代币",
-    "boost_subtitle": "在 BluPrint 启动信息流中展示，即时提高可见性。",
-    "boost_price": "4天 0.1 SOL",
-    "boost_button": "立即推广",
-    "boost_featured": "⭐ 精选启动",
-    
-    // CTA
-    "cta_title": "准备好启动您的代币了吗？",
-    "cta_subtitle": "加入在 BluPrint 上启动 meme 币的数千名创作者",
-    "cta_button": "立即开始创建",
-    
-    "footer_rights": "保留所有权利",
+    "pool_title": "🎁 前100个代币特别优惠！🎁",
+    "pool_first": "仅剩",
+    "pool_tokens": "个代币名额",
+    "create_title": "✨ 创建您的 Meme 币",
+    "create_subtitle": "在 Solana 上即时部署",
+    "create_name_label": "代币名称",
+    "create_name_placeholder": "例如：我的牛逼币",
+    "create_symbol_label": "代币符号",
+    "create_symbol_placeholder": "例如：MNBC",
+    "create_supply_label": "总供应量",
+    "create_decimals_label": "小数位数",
+    "create_logo_label": "代币标志",
+    "create_logo_placeholder": "点击上传图片",
+    "create_desc_label": "描述（可选）",
+    "create_desc_placeholder": "描述您的代币...",
+    "create_launch": "⚡ 启动代币 ⚡",
+    "create_first100": "前100个代币特惠",
+    "create_secure_label": "安全代币",
+    "create_social_button": "添加社交链接",
     "common_free": "免费",
     "common_close": "关闭",
     "connect_wallet_first": "请先连接您的钱包",
   },
   ru: {
-    // Navigation
     "nav_home": "Главная",
     "nav_create": "Создать",
     "nav_new_pairs": "Новые пары",
@@ -275,48 +341,31 @@ const translations: Record<Locale, Translations> = {
     "nav_live": "Лента",
     "nav_top_users": "Топ пользователей",
     "nav_connect": "Подключить кошелек",
-    
-    // Feature Cards
     "feature_fast_title": "Быстрый деплой",
     "feature_fast_desc": "Большинство токенов развертываются менее чем за 30 секунд",
     "feature_secure_title": "Безопасный запуск",
     "feature_secure_desc": "Контроль полномочий включен при создании",
     "feature_solana_title": "На базе Solana",
     "feature_solana_desc": "Построено непосредственно на инфраструктуре Solana",
-    
-    // Why BluPrint
-    "why_title": "Почему BluPrint?",
-    "why_subtitle": "Быстрый и простой способ запуска на Solana.",
-    "why_instant": "Мгновенный запуск",
-    "why_instant_desc": "Разверните свой токен за секунды.",
-    "why_security": "Встроенная безопасность",
-    "why_security_desc": "Опции разрешений на майнинг и заморозку включены.",
-    "why_nocode": "Без кода",
-    "why_nocode_desc": "Не нужны разработчики.",
-    
-    // How It Works
-    "how_title": "Как это работает",
-    "how_subtitle": "Запустите свой токен в три простых шага.",
-    "how_step1": "Выберите токен",
-    "how_step1_desc": "Укажите название, символ и логотип токена.",
-    "how_step2": "Подтвердите транзакцию",
-    "how_step2_desc": "Подтвердите транзакцию в кошельке.",
-    "how_step3": "Запустите и делитесь",
-    "how_step3_desc": "Ваш токен на Solana! 🚀",
-    
-    // Boost Section
-    "boost_title": "🚀 Продвиньте свой токен",
-    "boost_subtitle": "Покажите свой токен в ленте запуска BluPrint для мгновенной видимости.",
-    "boost_price": "0.1 SOL на 4 дня",
-    "boost_button": "Продвинуть",
-    "boost_featured": "⭐ ИЗБРАННЫЙ ЗАПУСК",
-    
-    // CTA
-    "cta_title": "Готовы запустить свой токен?",
-    "cta_subtitle": "Присоединяйтесь к тысячам создателей, запустивших свои мемкоины на BluPrint",
-    "cta_button": "Начать создание",
-    
-    "footer_rights": "Все права защищены",
+    "pool_title": "🎁 Спецпредложение для первых 100 токенов! 🎁",
+    "pool_first": "Осталось",
+    "pool_tokens": "токенов",
+    "create_title": "✨ Создайте свою Meme монету",
+    "create_subtitle": "Мгновенный запуск на Solana",
+    "create_name_label": "Название токена",
+    "create_name_placeholder": "например: Мой Классный Токен",
+    "create_symbol_label": "Символ токена",
+    "create_symbol_placeholder": "например: МКТ",
+    "create_supply_label": "Общая эмиссия",
+    "create_decimals_label": "Десятичные знаки",
+    "create_logo_label": "Логотип токена",
+    "create_logo_placeholder": "Нажмите для загрузки изображения",
+    "create_desc_label": "Описание (необязательно)",
+    "create_desc_placeholder": "Опишите ваш токен...",
+    "create_launch": "⚡ ЗАПУСТИТЬ ТОКЕН ⚡",
+    "create_first100": "Спецпредложение для первых 100",
+    "create_secure_label": "Безопасный токен",
+    "create_social_button": "Добавить соцсети",
     "common_free": "БЕСПЛАТНО",
     "common_close": "Закрыть",
     "connect_wallet_first": "Пожалуйста, сначала подключите кошелек",
