@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 let cachedTokens: any[] = [];
 let lastFetch = 0;
-const CACHE_DURATION = 60 * 1000; // 1 dakika cache
+const CACHE_DURATION = 60 * 1000; // 1 dakika
 
 export async function GET() {
   const now = Date.now();
@@ -13,59 +13,53 @@ export async function GET() {
   }
   
   try {
-    // DexPaprika - yeni tokenlar için
-    // Önce Solana chain ID'sini bulalım
-    const chainsRes = await fetch('https://api.dexpaprika.com/chains');
-    const chainsData = await chainsRes.json();
-    
-    let solanaId = 'solana';
-    for (const chain of chainsData.data || []) {
-      if (chain.name === 'Solana') {
-        solanaId = chain.id;
-        break;
-      }
-    }
-    
-    // Yeni tokenları çek (son 24 saatte eklenenler)
-    const response = await fetch(
-      `https://api.dexpaprika.com/tokens?chain=${solanaId}&sort=new&limit=50`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'application/json',
-        },
-        next: { revalidate: 60 }
-      }
-    );
+    // DexPaprika - direkt token listesi (en basit)
+    const response = await fetch('https://api.dexpaprika.com/tokens?limit=50', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': 'application/json',
+      },
+    });
     
     if (!response.ok) {
-      throw new Error(`DexPaprika API returned ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
     
     const data = await response.json();
     
     if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-      const formattedTokens = data.data.slice(0, 50).map((token: any) => ({
-        mint: token.id,
+      // Sadece Solana tokenlarını filtrele
+      const solanaTokens = data.data.filter((token: any) => 
+        token.chain?.toLowerCase() === 'solana' || 
+        token.chain_id === 'solana' ||
+        token.symbol === 'SOL' ||
+        token.id?.startsWith('solana')
+      );
+      
+      const tokensToUse = solanaTokens.length > 0 ? solanaTokens : data.data;
+      
+      const formattedTokens = tokensToUse.slice(0, 50).map((token: any) => ({
+        mint: token.id || token.address || token.mint,
         name: token.name || "Unknown",
         symbol: token.symbol || "???",
-        image: token.logo || "",
-        volume24h: token.volume_24h || 0,
+        image: token.logo || token.logo_url || "",
+        volume24h: token.volume_24h || token.volume || 0,
         liquidity: token.liquidity || 0,
         priceChange24h: token.price_change_24h || 0,
-        createdAt: token.created_at,
+        createdAt: token.created_at || token.createdAt,
         dex: "DexPaprika"
       }));
       
-      cachedTokens = formattedTokens;
-      lastFetch = now;
-      
-      return NextResponse.json({ 
-        success: true, 
-        tokens: formattedTokens,
-        total: formattedTokens.length,
-        source: 'dexpaprika'
-      });
+      if (formattedTokens.length > 0) {
+        cachedTokens = formattedTokens;
+        lastFetch = now;
+        
+        return NextResponse.json({ 
+          success: true, 
+          tokens: formattedTokens,
+          total: formattedTokens.length
+        });
+      }
     }
     
     throw new Error('No tokens found');
@@ -73,7 +67,7 @@ export async function GET() {
   } catch (error: any) {
     console.error('DexPaprika API error:', error);
     
-    // Hata durumunda cache'teki veriyi döndür
+    // Cache'te veri varsa onu kullan
     if (cachedTokens.length > 0) {
       return NextResponse.json({ 
         success: true, 
