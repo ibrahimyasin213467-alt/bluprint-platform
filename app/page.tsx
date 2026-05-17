@@ -14,14 +14,12 @@ import LiveExperience from "./components/LiveExperience";
 import TrustSection from "./components/TrustSection";
 import UseCase from "./components/UseCase";
 import FinalCTA from "./components/FinalCTA";
-import PoolStats from "./components/PoolStats";
-import FeaturedTokens from "./components/FeaturedTokens";
 import BoostSection from "./components/BoostSection";
 import SuccessModal from "./components/SuccessModal";
 import { useToast } from "./components/ToastProvider";
 import { useI18n } from "./lib/i18n-provider";
 
-// İç component (tüm mevcut mantık burada)
+// İç component
 function HomeContent() {
   const { t } = useI18n();
   const { publicKey } = useWallet();
@@ -61,13 +59,13 @@ function HomeContent() {
 
   useEffect(() => {
     if (validReferrer) {
-      showToast(`${t('referralLinkDetected')}`, "info");
+      showToast(`Referral link detected! You'll save 0.02 SOL`, "info");
     }
-  }, [validReferrer, showToast, t]);
+  }, [validReferrer, showToast]);
 
   const handleCreateClick = () => {
     if (!publicKey) {
-      showToast(t('connectWalletFirst'), "warning");
+      showToast("Please connect your wallet first", "warning");
       return;
     }
     router.push("/create");
@@ -76,7 +74,7 @@ function HomeContent() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    showToast(t('uploadingLogo'), "info");
+    showToast("Uploading logo...", "info");
     const formData = new FormData();
     formData.append("logo", file);
     try {
@@ -85,7 +83,7 @@ function HomeContent() {
       if (data.success) {
         setTokenImage(data.url);
         setPreviewImage(URL.createObjectURL(file));
-        showToast(t('logoUploaded'), "success");
+        showToast("Logo uploaded!", "success");
       } else {
         showToast(`❌ ${data.error}`, "error");
       }
@@ -95,18 +93,18 @@ function HomeContent() {
   };
 
   const validateInputs = () => {
-    if (tokenName.length < 3 || tokenName.length > 32) return t('tokenNameError');
-    if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return t('tokenSymbolError');
-    if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return t('tokenSymbolInvalid');
-    if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return t('tokenSupplyError');
-    if (tokenDecimals < 0 || tokenDecimals > 9) return t('tokenDecimalsError');
+    if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
+    if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Token symbol must be 2-8 characters";
+    if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return "Symbol can only contain letters and numbers";
+    if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return "Supply must be between 1,000 and 10,000,000,000";
+    if (tokenDecimals < 0 || tokenDecimals > 9) return "Decimals must be between 0 and 9";
     return null;
   };
 
   const createToken = async () => {
     if (isProcessing || loading) return;
     if (!publicKey) {
-      showToast(t('connectWalletFirst'), "warning");
+      showToast("Please connect your wallet first", "warning");
       return;
     }
     const validationError = validateInputs();
@@ -118,9 +116,9 @@ function HomeContent() {
     setIsProcessing(true);
     setLoading(true);
     setProgress(0);
-    setStep(t('initializing'));
+    setStep("Initializing...");
     setEstimatedTime(5);
-    setStatus(t('preparingToken'));
+    setStatus("Preparing token...");
 
     const start = Date.now();
 
@@ -136,12 +134,12 @@ function HomeContent() {
     }, 100);
 
     const steps = [
-      { progress: 10, text: t('stepValidating') },
-      { progress: 25, text: t('stepPreparingMint') },
-      { progress: 40, text: t('stepProcessingFee') },
-      { progress: 55, text: t('stepCreatingToken') },
-      { progress: 70, text: t('stepMintingSupply') },
-      { progress: 85, text: t('stepFinalizing') },
+      { progress: 10, text: "Validating..." },
+      { progress: 25, text: "Preparing mint..." },
+      { progress: 40, text: "Processing fee..." },
+      { progress: 55, text: "Creating token..." },
+      { progress: 70, text: "Minting supply..." },
+      { progress: 85, text: "Finalizing..." },
     ];
 
     let stepIndex = 0;
@@ -175,7 +173,7 @@ function HomeContent() {
       clearInterval(progressInterval.current);
       clearInterval(stepInterval);
       setProgress(100);
-      setStep(t('done'));
+      setStep("Done!");
 
       const end = Date.now();
       setTime((end - start) / 1000);
@@ -193,7 +191,7 @@ function HomeContent() {
       });
       setStatus("");
       setRetryCount(0);
-      showToast(t('tokenCreated'), "success");
+      showToast("Token created successfully!", "success");
     } catch (err: any) {
       clearInterval(progressInterval.current);
       clearInterval(stepInterval);
@@ -230,18 +228,34 @@ function HomeContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        {/* BANNER KALDIRILDI - Layout'tan geliyor */}
-        
         <div className="pt-16 max-w-6xl mx-auto px-4">
           <HeroSection onCreateClick={handleCreateClick} />
-          <PoolStats />
-          <FeaturedTokens />
-          <BoostSection />
+          
+          {/* STATS SECTION - REPLACES FAKE POOL */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 transition-all duration-300 group">
+              <div className="text-3xl mb-2">⚡</div>
+              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition">~0.6s</div>
+              <div className="text-sm text-gray-400">Avg Deploy Time</div>
+            </div>
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 transition-all duration-300 group">
+              <div className="text-3xl mb-2">🌍</div>
+              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition">40+</div>
+              <div className="text-sm text-gray-400">Global Creators</div>
+            </div>
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 transition-all duration-300 group">
+              <div className="text-3xl mb-2">🔷</div>
+              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition">1,000+</div>
+              <div className="text-sm text-gray-400">Tokens Launched</div>
+            </div>
+          </div>
+
           <WhyBluPrint />
           <HowItWorks />
           <LiveExperience />
           <TrustSection />
           <UseCase />
+          <BoostSection />
           <FinalCTA onScrollToForm={handleCreateClick} />
         </div>
         <Footer />
@@ -250,7 +264,7 @@ function HomeContent() {
   );
 }
 
-// Ana export - Suspense ile sarmalanmış
+// Ana export
 export default function Home() {
   return (
     <Suspense fallback={<div className="flex justify-center items-center min-h-screen text-gray-500">Loading...</div>}>
