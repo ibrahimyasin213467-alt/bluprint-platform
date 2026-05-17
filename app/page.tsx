@@ -19,6 +19,59 @@ import SuccessModal from "./components/SuccessModal";
 import { useToast } from "./components/ToastProvider";
 import { useI18n } from "./lib/i18n-provider";
 
+// Feature Card Component
+function FeatureCard({ icon, title, description, delay, iconColor = "blue" }: { 
+  icon: string; 
+  title: string; 
+  description: string; 
+  delay: number;
+  iconColor?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay }}
+      whileHover={{ y: -8 }}
+      className="group relative"
+    >
+      {/* Animated border gradient on hover */}
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 rounded-2xl blur-xl opacity-0 group-hover:opacity-60 transition duration-500" />
+      
+      {/* Card */}
+      <div className="relative bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-black/90 backdrop-blur-xl rounded-2xl border border-white/10 group-hover:border-blue-500/40 transition-all duration-300 overflow-hidden">
+        
+        {/* Animated shine effect on hover */}
+        <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
+        
+        {/* Glowing orb behind icon */}
+        <div className="absolute top-6 left-6 w-20 h-20 rounded-full bg-blue-500/10 blur-2xl group-hover:bg-blue-500/20 transition duration-500" />
+        
+        <div className="p-6 sm:p-8 text-center relative z-10">
+          {/* Icon Container */}
+          <div className="relative mb-5 inline-block">
+            <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-lg group-hover:blur-xl transition duration-300" />
+            <div className={`relative w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-gray-800 to-gray-900 border border-white/10 group-hover:border-blue-500/50 flex items-center justify-center text-2xl transition-all duration-300 group-hover:scale-110`}>
+              <span className="group-hover:animate-pulse">{icon}</span>
+            </div>
+          </div>
+          
+          {/* Title */}
+          <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition duration-300">
+            {title}
+          </h3>
+          
+          {/* Description */}
+          <p className="text-gray-400 text-sm leading-relaxed">
+            {description}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // İç component
 function HomeContent() {
   const { t } = useI18n();
@@ -229,25 +282,36 @@ function HomeContent() {
     <PageTransition>
       <div className="relative min-h-screen">
         <div className="pt-16 max-w-6xl mx-auto px-4">
-          {/* HERO SECTION - DOKUNMA */}
+          {/* HERO SECTION */}
           <HeroSection onCreateClick={handleCreateClick} />
           
-          {/* SPEED & SIMPLICITY SECTION - Fake pool yerine */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300 group">
-              <div className="text-3xl mb-2">⚡</div>
-              <div className="text-lg font-bold text-white mb-1">Fast Deployment</div>
-              <div className="text-sm text-gray-400">Most tokens deploy in under 30 seconds</div>
+          {/* PREMIUM FEATURE CARDS SECTION - SPEED & SIMPLICITY */}
+          <div className="relative py-12 mb-8">
+            {/* Ambient background effects */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute top-1/2 left-1/4 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl animate-pulse" />
+              <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300 group">
-              <div className="text-3xl mb-2">🔒</div>
-              <div className="text-lg font-bold text-white mb-1">Secure Launch</div>
-              <div className="text-sm text-gray-400">Authority controls included during creation</div>
-            </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300 group">
-              <div className="text-3xl mb-2">🌐</div>
-              <div className="text-lg font-bold text-white mb-1">Solana Powered</div>
-              <div className="text-sm text-gray-400">Built directly on Solana infrastructure</div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+              <FeatureCard
+                icon="⚡"
+                title="Fast Deployment"
+                description="Most tokens deploy in under 30 seconds"
+                delay={0}
+              />
+              <FeatureCard
+                icon="🔒"
+                title="Secure Launch"
+                description="Authority controls included during creation"
+                delay={0.1}
+              />
+              <FeatureCard
+                icon="🌐"
+                title="Solana Powered"
+                description="Built directly on Solana infrastructure"
+                delay={0.2}
+              />
             </div>
           </div>
 
