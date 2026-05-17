@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useI18n } from "../lib/i18n-provider";
-import type { Locale } from "../lib/i18n-provider";
 import { motion, AnimatePresence } from "framer-motion";
 
-const languages: { code: Locale; label: string; flag: string }[] = [
+const languages = [
   { code: "en", label: "English", flag: "🇬🇧" },
   { code: "tr", label: "Türkçe", flag: "🇹🇷" },
   { code: "zh", label: "中文", flag: "🇨🇳" },
@@ -52,9 +51,9 @@ export default function LanguageSwitcher() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.15 }}
             className="absolute bottom-full left-0 mb-1 w-full bg-gray-800 rounded-xl border border-gray-700 shadow-xl overflow-hidden z-50"
           >
@@ -62,7 +61,7 @@ export default function LanguageSwitcher() {
               <button
                 key={lang.code}
                 onClick={() => {
-                  setLocale(lang.code);
+                  setLocale(lang.code as any);
                   setIsOpen(false);
                 }}
                 className={`flex items-center gap-2 w-full px-3 py-2 text-sm transition-colors duration-150 ${
