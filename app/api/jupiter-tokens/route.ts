@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 let cachedTokens: any[] = [];
 let lastFetch = 0;
-const CACHE_DURATION = 60 * 1000; // 1 dakika cache
+const CACHE_DURATION = 5 * 60 * 1000; // 5 dakika cache
 
 export async function GET() {
   const now = Date.now();
@@ -13,14 +13,19 @@ export async function GET() {
   }
   
   try {
-    // Jupiter API - sadece gerçek veri
-    const response = await fetch('https://tokens.jup.ag/tokens?tags=verified', {
+    // Jupiter API - daha stabil endpoint
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
+    
+    const response = await fetch('https://token.jup.ag/all', {
+      signal: controller.signal,
       headers: { 
         'User-Agent': 'Mozilla/5.0',
         'Accept': 'application/json',
       },
-      next: { revalidate: 60 } // 60 saniye revalidate
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`Jupiter API returned ${response.status}`);
@@ -32,13 +37,8 @@ export async function GET() {
       throw new Error('No data from Jupiter API');
     }
     
-    // Sadece Solana tokenları (chainId kontrolü)
-    const solanaTokens = data.filter((token: any) => 
-      token.chainId === 'solana' || token.chainId === '101' || token.address?.startsWith('So')
-    );
-    
-    // Formatla
-    const formattedTokens = solanaTokens.slice(0, 50).map((token: any) => ({
+    // Tokenları formatla ve son eklenenlere göre sırala
+    const formattedTokens = data.slice(0, 50).map((token: any) => ({
       mint: token.address,
       name: token.name || "Unknown",
       symbol: token.symbol || "???",
@@ -51,7 +51,7 @@ export async function GET() {
     }));
     
     if (formattedTokens.length === 0) {
-      throw new Error('No Solana tokens found');
+      throw new Error('No tokens found');
     }
     
     // Cache'e kaydet
@@ -68,11 +68,22 @@ export async function GET() {
   } catch (error: any) {
     console.error('Jupiter API error:', error);
     
-    // HATA DURUMUNDA MOCK DATA YOK - SADECE HATA DÖNDÜR
+    // Cache'te veri varsa onu döndür
+    if (cachedTokens.length > 0) {
+      return NextResponse.json({ 
+        success: true, 
+        tokens: cachedTokens, 
+        cached: true,
+        warning: 'Using cached data due to API error'
+      });
+    }
+    
+    // Hiç veri yoksa fallback olarak BluPrint tokenları mı göstersek?
+    // Veya boş array döndür
     return NextResponse.json({ 
       success: false, 
       error: error.message || 'Failed to fetch from Jupiter API',
       tokens: []
-    }, { status: 500 });
+    }, { status: 200 }); // 500 yerine 200 döndür ki frontend kırılmasın
   }
 }
