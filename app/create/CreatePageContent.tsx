@@ -556,7 +556,7 @@ export default function CreatePageContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen bg-transparent">
-        {/* Background efektleri kaldırıldı - Background.tsx kullanılıyor */}
+        {/* Background efektleri Background.tsx'den geliyor */}
         
         <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
           {tokensLeft > 0 && (
@@ -581,7 +581,7 @@ export default function CreatePageContent() {
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-3xl sm:text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
+              className="text-3xl sm:text-5xl font-bold text-white"
             >
               {t("create_title")}
             </motion.h2>
