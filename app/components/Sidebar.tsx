@@ -46,8 +46,8 @@ export default function Sidebar() {
 
   const sidebarContent = (
     <>
-      {/* Logo */}
-      <div className="px-4 py-6 border-b border-gray-800">
+      {/* Logo - daha küçük padding */}
+      <div className="px-4 py-4 border-b border-gray-800">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 overflow-hidden">
             <img 
@@ -63,13 +63,13 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Menu Items */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      {/* Menu Items - daha az padding */}
+      <nav className="flex-1 px-3 py-3 space-y-0.5">
         {menuItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+            className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${
               isActive(item.href)
                 ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/25"
                 : "text-gray-400 hover:text-white hover:bg-gray-800/50"
@@ -88,12 +88,12 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Wallet & Settings - YUKARI KAYDIRILDI */}
-      <div className="px-3 pt-2 pb-4 border-t border-gray-800 space-y-2.5">
+      {/* Wallet & Settings - İYİCE YUKARIDA, border yok */}
+      <div className="px-3 pt-0 pb-3 space-y-2">
         {/* Connect Wallet Butonu */}
         <button
           onClick={handleWalletClick}
-          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-green-600/20 to-green-500/10 border border-green-500/30 hover:from-green-600/30 hover:to-green-500/20 transition-all duration-200"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-green-600/20 to-green-500/10 border border-green-500/30 hover:from-green-600/30 hover:to-green-500/20 transition-all duration-200"
         >
           <div className="w-6 h-6 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg">
             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -109,14 +109,10 @@ export default function Sidebar() {
           )}
         </button>
         
-        {/* Theme & Language - YANYANA */}
-        <div className="flex items-center justify-between gap-2 px-1 py-1.5">
-          <div className="flex-1">
-            <ThemeToggle />
-          </div>
-          <div className="flex-1">
-            <LanguageSwitcher />
-          </div>
+        {/* Theme & Language - YANYANA, daha kompakt */}
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <ThemeToggle />
+          <LanguageSwitcher />
         </div>
       </div>
     </>
