@@ -556,7 +556,11 @@ export default function CreatePageContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen bg-transparent">
-        {/* Background efektleri Background.tsx'den geliyor */}
+  {/* SİYAH OVERLAY - ÇOK HAFİF */}
+  <div className="fixed inset-0 bg-black/30 pointer-events-none z-0" />
+  
+  {/* Background efektleri Background.tsx'den geliyor */}
+  <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16"></div>        {/* Background efektleri Background.tsx'den geliyor */}
         
         <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
           {tokensLeft > 0 && (
