@@ -20,13 +20,14 @@ import { useToast } from "./components/ToastProvider";
 import { useI18n } from "./lib/i18n-provider";
 
 // Feature Card Component
-function FeatureCard({ icon, title, description, delay, iconColor = "blue" }: { 
+function FeatureCard({ icon, titleKey, descKey, delay }: { 
   icon: string; 
-  title: string; 
-  description: string; 
+  titleKey: string; 
+  descKey: string; 
   delay: number;
-  iconColor?: string;
 }) {
+  const { t } = useI18n();
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -57,14 +58,14 @@ function FeatureCard({ icon, title, description, delay, iconColor = "blue" }: {
             </div>
           </div>
           
-          {/* Title */}
+          {/* Title - ÇEVİRİ DESTEKLİ */}
           <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition duration-300">
-            {title}
+            {t(titleKey)}
           </h3>
           
-          {/* Description */}
+          {/* Description - ÇEVİRİ DESTEKLİ */}
           <p className="text-gray-400 text-sm leading-relaxed">
-            {description}
+            {t(descKey)}
           </p>
         </div>
       </div>
@@ -285,7 +286,7 @@ function HomeContent() {
           {/* HERO SECTION */}
           <HeroSection onCreateClick={handleCreateClick} />
           
-          {/* PREMIUM FEATURE CARDS SECTION - SPEED & SIMPLICITY */}
+          {/* PREMIUM FEATURE CARDS SECTION - ÇEVİRİ DESTEKLİ */}
           <div className="relative py-12 mb-8">
             {/* Ambient background effects */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -296,20 +297,20 @@ function HomeContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
               <FeatureCard
                 icon="⚡"
-                title="Fast Deployment"
-                description="Most tokens deploy in under 30 seconds"
+                titleKey="feature_fast_title"
+                descKey="feature_fast_desc"
                 delay={0}
               />
               <FeatureCard
                 icon="🔒"
-                title="Secure Launch"
-                description="Authority controls included during creation"
+                titleKey="feature_secure_title"
+                descKey="feature_secure_desc"
                 delay={0.1}
               />
               <FeatureCard
                 icon="🌐"
-                title="Solana Powered"
-                description="Built directly on Solana infrastructure"
+                titleKey="feature_solana_title"
+                descKey="feature_solana_desc"
                 delay={0.2}
               />
             </div>
