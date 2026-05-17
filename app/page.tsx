@@ -229,24 +229,25 @@ function HomeContent() {
     <PageTransition>
       <div className="relative min-h-screen">
         <div className="pt-16 max-w-6xl mx-auto px-4">
+          {/* HERO SECTION - DOKUNMA */}
           <HeroSection onCreateClick={handleCreateClick} />
           
-          {/* STATS SECTION - REPLACES FAKE POOL */}
+          {/* SPEED & SIMPLICITY SECTION - Fake pool yerine */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 transition-all duration-300 group">
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300 group">
               <div className="text-3xl mb-2">⚡</div>
-              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition">~0.6s</div>
-              <div className="text-sm text-gray-400">Avg Deploy Time</div>
+              <div className="text-lg font-bold text-white mb-1">Fast Deployment</div>
+              <div className="text-sm text-gray-400">Most tokens deploy in under 30 seconds</div>
             </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 transition-all duration-300 group">
-              <div className="text-3xl mb-2">🌍</div>
-              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition">40+</div>
-              <div className="text-sm text-gray-400">Global Creators</div>
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300 group">
+              <div className="text-3xl mb-2">🔒</div>
+              <div className="text-lg font-bold text-white mb-1">Secure Launch</div>
+              <div className="text-sm text-gray-400">Authority controls included during creation</div>
             </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 transition-all duration-300 group">
-              <div className="text-3xl mb-2">🔷</div>
-              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition">1,000+</div>
-              <div className="text-sm text-gray-400">Tokens Launched</div>
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-6 text-center hover:border-blue-500/50 hover:-translate-y-1 transition-all duration-300 group">
+              <div className="text-3xl mb-2">🌐</div>
+              <div className="text-lg font-bold text-white mb-1">Solana Powered</div>
+              <div className="text-sm text-gray-400">Built directly on Solana infrastructure</div>
             </div>
           </div>
 
