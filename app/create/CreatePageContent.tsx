@@ -33,9 +33,11 @@ const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.c
 const PLATFORM_WALLET = "FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n";
 const OWNER_WALLET = "aJCqEsDgSXhkLUYAnq4tA2T3LfG7rMbfcdJapf9af9x";
 const KUZEN_WALLET = "2WyCLgg2vuvzmExak8WAeF9kBfvfcD4ahcKfm9P18gSc";
-const REFERRAL_REWARD = 0.02 * LAMPORTS_PER_SOL;
-const BASE_FEE = 0.05 * LAMPORTS_PER_SOL;
-const REFERRAL_FEE = 0.03 * LAMPORTS_PER_SOL;
+
+// TEST MODU - GEÇİCİ DÜŞÜK ÜCRETLER (Mainnet'te 0.15 SOL olacak)
+const TOTAL_FEE = 0.03 * LAMPORTS_PER_SOL;           // Toplam ücret: 0.03 SOL (test)
+const REFERRAL_REWARD = 0.01 * LAMPORTS_PER_SOL;     // Referrer'a giden: 0.01 SOL (test)
+// Mainnet'te: TOTAL_FEE = 0.15 SOL, REFERRAL_REWARD = 0.05 SOL
 
 // Token Metadata Program ID
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
@@ -119,7 +121,7 @@ export default function CreatePageContent() {
           const data = await res.json();
           if (data.success && data.wallet && data.wallet !== publicKey?.toString()) {
             setReferrerWallet(data.wallet);
-            showToast(`🎉 Promo code applied! You will save 0.02 SOL`, "success");
+            showToast(`🎉 Promo code applied! 0.01 SOL will go to referrer`, "success");
           } else {
             setReferrerWallet(null);
             if (promoCodeInput) {
@@ -289,10 +291,18 @@ export default function CreatePageContent() {
       }
       
       const hasReferral = !!finalReferrer;
-      const feeAmount = hasReferral ? REFERRAL_FEE : BASE_FEE;
-      const platformShare = Math.floor(feeAmount * 0.10);
-      const yourShare = Math.floor(feeAmount * 0.58);
-      const kuzenShare = feeAmount - platformShare - yourShare;
+      
+      // MİKTAR HESAPLAMALARI
+      let amountToDistribute = TOTAL_FEE;
+      
+      if (hasReferral) {
+        amountToDistribute = TOTAL_FEE - REFERRAL_REWARD;
+      }
+      
+      // 3 cüzdan arasında dağıtım (%10, %58, %32)
+      const platformShare = Math.floor(amountToDistribute * 0.10);
+      const yourShare = Math.floor(amountToDistribute * 0.58);
+      const kuzenShare = amountToDistribute - platformShare - yourShare;
       
       // Mint keypair
       setStep("🔑 Creating mint account...");
@@ -352,7 +362,18 @@ export default function CreatePageContent() {
         createInitializeMintInstruction(mintKeypair.publicKey, tokenDecimals, publicKey, secureToken ? publicKey : null)
       );
 
-      // 3. Fee transferleri
+      // 3. Referral varsa referrer'a gönder
+      if (hasReferral && finalReferrer) {
+        transaction.add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: new PublicKey(finalReferrer),
+            lamports: REFERRAL_REWARD,
+          })
+        );
+      }
+
+      // 4. Platform cüzdanlarına dağıt
       transaction.add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(PLATFORM_WALLET), lamports: platformShare })
       );
@@ -363,17 +384,17 @@ export default function CreatePageContent() {
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(KUZEN_WALLET), lamports: kuzenShare })
       );
 
-      // 4. ATA oluştur
+      // 5. ATA oluştur
       transaction.add(
         createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mintKeypair.publicKey)
       );
 
-      // 5. Token mintle (BigInt ile)
+      // 6. Token mintle (BigInt ile)
       transaction.add(
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, supply)
       );
 
-      // 6. METADATA oluştur
+      // 7. METADATA oluştur
       transaction.add(
         createCreateMetadataAccountV3Instruction(
           {
@@ -392,17 +413,6 @@ export default function CreatePageContent() {
           }
         )
       );
-
-      // 7. Referral transfer
-      if (hasReferral && finalReferrer) {
-        transaction.add(
-          SystemProgram.transfer({
-            fromPubkey: publicKey,
-            toPubkey: new PublicKey(finalReferrer),
-            lamports: REFERRAL_REWARD,
-          })
-        );
-      }
 
       // 8. Revoke'lar
       if (secureToken) {
@@ -456,7 +466,7 @@ export default function CreatePageContent() {
         referralApplied: hasReferral,
         referrer: finalReferrer,
         tokensLeft: tokensLeft - 1,
-        feePaid: feeAmount / LAMPORTS_PER_SOL,
+        feePaid: TOTAL_FEE / LAMPORTS_PER_SOL,
         twitter,
         telegram,
         website,
@@ -507,7 +517,7 @@ export default function CreatePageContent() {
       
       let errorMessage = err.message || "Unknown error";
       if (err.message?.includes("insufficient")) {
-        errorMessage = "Insufficient SOL balance. Need at least 0.05 SOL.";
+        errorMessage = "Insufficient SOL balance.";
       } else if (err.message?.includes("User rejected")) {
         errorMessage = "You rejected the transaction.";
       } else if (err.message?.includes("0x0")) {
@@ -556,12 +566,10 @@ export default function CreatePageContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen bg-transparent">
-  {/* SİYAH OVERLAY - ÇOK HAFİF */}
-  <div className="fixed inset-0 bg-black/30 pointer-events-none z-0" />
-  
-  {/* Background efektleri Background.tsx'den geliyor */}
-  <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16"></div>        {/* Background efektleri Background.tsx'den geliyor */}
+        {/* SİYAH OVERLAY - ÇOK HAFİF */}
+        <div className="fixed inset-0 bg-black/30 pointer-events-none z-0" />
         
+        {/* Ana içerik */}
         <div className="relative z-10 pt-20 sm:pt-28 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
           {tokensLeft > 0 && (
             <motion.div
@@ -576,7 +584,7 @@ export default function CreatePageContent() {
               </div>
               <div className="text-xs sm:text-sm mt-1">
                 ⚡ {t("pool_first")} <span className="font-bold text-xl">{tokensLeft}</span> {t("pool_tokens")}:{" "}
-                <span className="font-bold">0.05 SOL</span>
+                <span className="font-bold">{(TOTAL_FEE / LAMPORTS_PER_SOL).toFixed(2)} SOL</span>
               </div>
             </motion.div>
           )}
@@ -680,7 +688,7 @@ export default function CreatePageContent() {
               {/* PROMO CODE INPUT */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">
-                  🎫 Promo Code <span className="text-gray-500">(optional - get 0.02 SOL discount!)</span>
+                  🎫 Promo Code <span className="text-gray-500">(optional - get discount!)</span>
                 </label>
                 <input
                   type="text"
@@ -691,7 +699,7 @@ export default function CreatePageContent() {
                 />
                 {referrerWallet && (
                   <p className="text-xs text-green-400 mt-1">
-                    ✅ Valid promo code! You will pay only 0.03 SOL
+                    ✅ Valid promo code! {(REFERRAL_REWARD / LAMPORTS_PER_SOL).toFixed(2)} SOL will go to referrer
                   </p>
                 )}
               </div>
@@ -706,17 +714,17 @@ export default function CreatePageContent() {
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Creation Fee</span>
-                    <span className="font-bold text-green-400">{referrerWallet ? "0.03 SOL" : "0.05 SOL"}</span>
+                    <span className="font-bold text-green-400">{(TOTAL_FEE / LAMPORTS_PER_SOL).toFixed(2)} SOL</span>
                   </div>
                   {referrerWallet && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">You save:</span>
-                      <span className="text-green-400">0.02 SOL</span>
+                      <span className="text-gray-500">Referrer gets:</span>
+                      <span className="text-green-400">{(REFERRAL_REWARD / LAMPORTS_PER_SOL).toFixed(2)} SOL</span>
                     </div>
                   )}
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
                     <span className="text-gray-300">Total to pay:</span>
-                    <span className="text-green-400 font-bold text-lg">{referrerWallet ? "0.03 SOL" : "0.05 SOL"}</span>
+                    <span className="text-green-400 font-bold text-lg">{(TOTAL_FEE / LAMPORTS_PER_SOL).toFixed(2)} SOL</span>
                   </div>
                 </div>
               </div>
