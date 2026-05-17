@@ -18,7 +18,6 @@ import PoolStats from "./components/PoolStats";
 import FeaturedTokens from "./components/FeaturedTokens";
 import BoostSection from "./components/BoostSection";
 import SuccessModal from "./components/SuccessModal";
-import MarqueeBanner from "./components/MarqueeBanner";
 import { useToast } from "./components/ToastProvider";
 import { useI18n } from "./lib/i18n-provider";
 
@@ -231,10 +230,9 @@ function HomeContent() {
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        {/* KAYAN BANNER - EN ÜSTE EKLENDİ */}
-        <MarqueeBanner />
+        {/* BANNER KALDIRILDI - Layout'tan geliyor */}
         
-        <div className="pt-24 max-w-6xl mx-auto px-4">
+        <div className="pt-16 max-w-6xl mx-auto px-4">
           <HeroSection onCreateClick={handleCreateClick} />
           <PoolStats />
           <FeaturedTokens />

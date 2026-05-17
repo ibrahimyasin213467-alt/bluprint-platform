@@ -45,7 +45,7 @@ export default function RootLayout({
           
           {/* Banner - sabit üstte */}
           <div className="fixed top-0 left-0 right-0 z-10">
-            
+            <MarqueeBanner />
           </div>
           
           {/* Sidebar - banner'ın altından başlar */}
