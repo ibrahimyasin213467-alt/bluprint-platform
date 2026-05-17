@@ -20,14 +20,13 @@ import { useToast } from "./components/ToastProvider";
 import { useI18n } from "./lib/i18n-provider";
 
 // Feature Card Component
-function FeatureCard({ icon, titleKey, descKey, delay }: { 
+function FeatureCard({ icon, titleKey, descKey, delay, t }: { 
   icon: string; 
   titleKey: string; 
   descKey: string; 
   delay: number;
+  t: (key: string) => string;
 }) {
-  const { t } = useI18n();
-  
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -37,33 +36,24 @@ function FeatureCard({ icon, titleKey, descKey, delay }: {
       whileHover={{ y: -8 }}
       className="group relative"
     >
-      {/* Animated border gradient on hover */}
       <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 rounded-2xl blur-xl opacity-0 group-hover:opacity-60 transition duration-500" />
       
-      {/* Card */}
       <div className="relative bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-black/90 backdrop-blur-xl rounded-2xl border border-white/10 group-hover:border-blue-500/40 transition-all duration-300 overflow-hidden">
-        
-        {/* Animated shine effect on hover */}
         <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
-        
-        {/* Glowing orb behind icon */}
         <div className="absolute top-6 left-6 w-20 h-20 rounded-full bg-blue-500/10 blur-2xl group-hover:bg-blue-500/20 transition duration-500" />
         
         <div className="p-6 sm:p-8 text-center relative z-10">
-          {/* Icon Container */}
           <div className="relative mb-5 inline-block">
             <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-lg group-hover:blur-xl transition duration-300" />
-            <div className={`relative w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-gray-800 to-gray-900 border border-white/10 group-hover:border-blue-500/50 flex items-center justify-center text-2xl transition-all duration-300 group-hover:scale-110`}>
+            <div className="relative w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-gray-800 to-gray-900 border border-white/10 group-hover:border-blue-500/50 flex items-center justify-center text-2xl transition-all duration-300 group-hover:scale-110">
               <span className="group-hover:animate-pulse">{icon}</span>
             </div>
           </div>
           
-          {/* Title - ÇEVİRİ DESTEKLİ */}
           <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition duration-300">
             {t(titleKey)}
           </h3>
           
-          {/* Description - ÇEVİRİ DESTEKLİ */}
           <p className="text-gray-400 text-sm leading-relaxed">
             {t(descKey)}
           </p>
@@ -113,13 +103,13 @@ function HomeContent() {
 
   useEffect(() => {
     if (validReferrer) {
-      showToast(`Referral link detected! You'll save 0.02 SOL`, "info");
+      showToast(t("referral_link_detected"), "info");
     }
-  }, [validReferrer, showToast]);
+  }, [validReferrer, showToast, t]);
 
   const handleCreateClick = () => {
     if (!publicKey) {
-      showToast("Please connect your wallet first", "warning");
+      showToast(t("connect_wallet_first"), "warning");
       return;
     }
     router.push("/create");
@@ -128,7 +118,7 @@ function HomeContent() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    showToast("Uploading logo...", "info");
+    showToast(t("uploading_logo"), "info");
     const formData = new FormData();
     formData.append("logo", file);
     try {
@@ -137,7 +127,7 @@ function HomeContent() {
       if (data.success) {
         setTokenImage(data.url);
         setPreviewImage(URL.createObjectURL(file));
-        showToast("Logo uploaded!", "success");
+        showToast(t("logo_uploaded"), "success");
       } else {
         showToast(`❌ ${data.error}`, "error");
       }
@@ -147,18 +137,18 @@ function HomeContent() {
   };
 
   const validateInputs = () => {
-    if (tokenName.length < 3 || tokenName.length > 32) return "Token name must be 3-32 characters";
-    if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return "Token symbol must be 2-8 characters";
-    if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return "Symbol can only contain letters and numbers";
-    if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return "Supply must be between 1,000 and 10,000,000,000";
-    if (tokenDecimals < 0 || tokenDecimals > 9) return "Decimals must be between 0 and 9";
+    if (tokenName.length < 3 || tokenName.length > 32) return t("token_name_error");
+    if (tokenSymbol.length < 2 || tokenSymbol.length > 8) return t("token_symbol_error");
+    if (!/^[A-Z0-9]+$/i.test(tokenSymbol)) return t("token_symbol_invalid");
+    if (tokenSupply < 1000 || tokenSupply > 10_000_000_000) return t("token_supply_error");
+    if (tokenDecimals < 0 || tokenDecimals > 9) return t("token_decimals_error");
     return null;
   };
 
   const createToken = async () => {
     if (isProcessing || loading) return;
     if (!publicKey) {
-      showToast("Please connect your wallet first", "warning");
+      showToast(t("connect_wallet_first"), "warning");
       return;
     }
     const validationError = validateInputs();
@@ -170,7 +160,7 @@ function HomeContent() {
     setIsProcessing(true);
     setLoading(true);
     setProgress(0);
-    setStep("Initializing...");
+    setStep("🚀 Initializing...");
     setEstimatedTime(5);
     setStatus("Preparing token...");
 
@@ -227,7 +217,7 @@ function HomeContent() {
       clearInterval(progressInterval.current);
       clearInterval(stepInterval);
       setProgress(100);
-      setStep("Done!");
+      setStep("✅ Done!");
 
       const end = Date.now();
       setTime((end - start) / 1000);
@@ -245,7 +235,7 @@ function HomeContent() {
       });
       setStatus("");
       setRetryCount(0);
-      showToast("Token created successfully!", "success");
+      showToast(t("token_created"), "success");
     } catch (err: any) {
       clearInterval(progressInterval.current);
       clearInterval(stepInterval);
@@ -283,46 +273,29 @@ function HomeContent() {
     <PageTransition>
       <div className="relative min-h-screen">
         <div className="pt-16 max-w-6xl mx-auto px-4">
-          {/* HERO SECTION */}
           <HeroSection onCreateClick={handleCreateClick} />
           
-          {/* PREMIUM FEATURE CARDS SECTION - ÇEVİRİ DESTEKLİ */}
+          {/* PREMIUM FEATURE CARDS SECTION */}
           <div className="relative py-12 mb-8">
-            {/* Ambient background effects */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div className="absolute top-1/2 left-1/4 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl animate-pulse" />
               <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-              <FeatureCard
-                icon="⚡"
-                titleKey="feature_fast_title"
-                descKey="feature_fast_desc"
-                delay={0}
-              />
-              <FeatureCard
-                icon="🔒"
-                titleKey="feature_secure_title"
-                descKey="feature_secure_desc"
-                delay={0.1}
-              />
-              <FeatureCard
-                icon="🌐"
-                titleKey="feature_solana_title"
-                descKey="feature_solana_desc"
-                delay={0.2}
-              />
+              <FeatureCard icon="⚡" titleKey="feature_fast_title" descKey="feature_fast_desc" delay={0} t={t} />
+              <FeatureCard icon="🔒" titleKey="feature_secure_title" descKey="feature_secure_desc" delay={0.1} t={t} />
+              <FeatureCard icon="🌐" titleKey="feature_solana_title" descKey="feature_solana_desc" delay={0.2} t={t} />
             </div>
           </div>
 
-          <WhyBluPrint />
-          <HowItWorks />
-          <LiveExperience />
-          <TrustSection />
-          <UseCase />
-          <BoostSection />
-          <FinalCTA onScrollToForm={handleCreateClick} />
+          <WhyBluPrint t={t} />
+          <HowItWorks t={t} />
+          <LiveExperience t={t} />
+          <TrustSection t={t} />
+          <UseCase t={t} />
+          <BoostSection t={t} />
+          <FinalCTA onScrollToForm={handleCreateClick} t={t} />
         </div>
         <Footer />
       </div>
