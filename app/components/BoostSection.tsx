@@ -1,27 +1,128 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useToast } from "./ToastProvider";
+import { useState, useEffect } from "react";
+import { Connection, Transaction, SystemProgram, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+
+interface Token {
+  mint: string;
+  name: string;
+  symbol: string;
+  image?: string;
+}
 
 export default function BoostSection() {
-  const router = useRouter();
-  const { connected } = useWallet();
+  const { connected, publicKey, sendTransaction } = useWallet();
   const { showToast } = useToast();
+  const [hasToken, setHasToken] = useState(false);
+  const [userTokens, setUserTokens] = useState<Token[]>([]);
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isBoosting, setIsBoosting] = useState(false);
 
-  const handleBoostClick = () => {
+  const PLATFORM_WALLET = new PublicKey("FPLcpDVhRTMTMGquiyeK3AwNtCaQQgNp6UwHPTcWDS2n");
+  const BOOST_PRICE = 0.1 * LAMPORTS_PER_SOL;
+
+  useEffect(() => {
+    if (connected && publicKey) {
+      fetchUserTokens();
+    } else {
+      setHasToken(false);
+      setUserTokens([]);
+      setSelectedToken(null);
+    }
+  }, [connected, publicKey]);
+
+  const fetchUserTokens = async () => {
+    try {
+      const res = await fetch(`/api/tokens?user=${publicKey?.toString()}`);
+      const data = await res.json();
+      if (data.success && data.tokens && data.tokens.length > 0) {
+        setHasToken(true);
+        setUserTokens(data.tokens);
+      } else {
+        setHasToken(false);
+        setUserTokens([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch user tokens:", err);
+      setHasToken(false);
+    }
+  };
+
+  const handleBoost = async () => {
     if (!connected) {
       showToast("Please connect your wallet first", "warning");
       return;
     }
-    router.push("/create");
+
+    if (!hasToken || userTokens.length === 0) {
+      showToast("You need to create a token first!", "warning");
+      return;
+    }
+
+    if (!selectedToken) {
+      showToast("Please select a token to boost", "warning");
+      return;
+    }
+
+    setIsBoosting(true);
+    setLoading(true);
+
+    try {
+      const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
+      
+      // 0.1 SOL transfer transaction
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey!,
+          toPubkey: PLATFORM_WALLET,
+          lamports: BOOST_PRICE,
+        })
+      );
+
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature, "confirmed");
+
+      // Boost API'ye bildir
+      const boostRes = await fetch("/api/boost", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mint: selectedToken.mint,
+          symbol: selectedToken.symbol,
+          name: selectedToken.name,
+          image: selectedToken.image || "",
+          userWallet: publicKey?.toString(),
+          signature,
+        }),
+      });
+
+      const boostData = await boostRes.json();
+
+      if (boostData.success) {
+        showToast(`✅ ${selectedToken.symbol} boosted successfully! Now on the banner.`, "success");
+        setSelectedToken(null);
+        // Banner'ı güncelle
+        window.dispatchEvent(new Event("boost-updated"));
+      } else {
+        throw new Error(boostData.error || "Boost failed");
+      }
+    } catch (error: any) {
+      console.error("Boost error:", error);
+      showToast(`❌ Boost failed: ${error.message}`, "error");
+    } finally {
+      setLoading(false);
+      setIsBoosting(false);
+    }
   };
 
   const benefits = [
     { icon: "📢", text: "Featured in Launch Feed" },
     { icon: "👁️", text: "Increased Visibility" },
-    { icon: "🎯", text: "More Discoverability" }
+    { icon: "🎯", text: "More Discoverability" },
   ];
 
   return (
@@ -42,10 +143,9 @@ export default function BoostSection() {
         >
           {/* Animated border glow */}
           <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition duration-500" />
-          
+
           {/* Main Card */}
           <div className="relative bg-gradient-to-br from-gray-900/95 via-gray-900/90 to-black/95 backdrop-blur-xl rounded-2xl border border-blue-500/30 overflow-hidden">
-            
             {/* Animated shine effect */}
             <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
 
@@ -77,7 +177,7 @@ export default function BoostSection() {
 
               {/* Title & Subtitle */}
               <div className="text-center mb-8">
-                <motion.h2 
+                <motion.h2
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
@@ -85,7 +185,7 @@ export default function BoostSection() {
                 >
                   🚀 Boost Your Token
                 </motion.h2>
-                <motion.p 
+                <motion.p
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
@@ -112,6 +212,55 @@ export default function BoostSection() {
                 ))}
               </div>
 
+              {/* Token Selection - Sadece token'ı olanlara göster */}
+              {connected && hasToken && userTokens.length > 0 && (
+                <div className="mb-6">
+                  <label className="block text-sm text-gray-400 mb-2 text-center">
+                    Select your token to boost:
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {userTokens.map((token) => (
+                      <button
+                        key={token.mint}
+                        onClick={() => setSelectedToken(token)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 ${
+                          selectedToken?.mint === token.mint
+                            ? "bg-blue-500/20 border-blue-500 shadow-lg shadow-blue-500/25"
+                            : "bg-gray-800/50 border-gray-700 hover:border-blue-500/50"
+                        }`}
+                      >
+                        {token.image ? (
+                          <img src={token.image} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-sm">
+                            🚀
+                          </div>
+                        )}
+                        <div className="text-left">
+                          <div className="font-semibold text-white text-sm">{token.name}</div>
+                          <div className="text-xs text-gray-400">{token.symbol}</div>
+                        </div>
+                        {selectedToken?.mint === token.mint && (
+                          <div className="ml-auto text-blue-400">✓</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Token'ı olmayanlara mesaj */}
+              {connected && !hasToken && (
+                <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-center">
+                  <p className="text-yellow-400 text-sm">
+                    ⚠️ You haven't created any tokens yet.
+                  </p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    Create a token first to boost it!
+                  </p>
+                </div>
+              )}
+
               {/* Price & CTA */}
               <div className="text-center">
                 <div className="mb-6">
@@ -120,21 +269,47 @@ export default function BoostSection() {
                 </div>
 
                 <motion.button
-                  onClick={handleBoostClick}
+                  onClick={handleBoost}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="relative group/btn"
+                  disabled={
+                    !connected ||
+                    !hasToken ||
+                    !selectedToken ||
+                    isBoosting ||
+                    loading
+                  }
+                  className="relative group/btn disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl blur opacity-0 group-hover/btn:opacity-100 transition duration-300" />
                   <div className="relative px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-xl text-white font-bold text-sm sm:text-base transition-all duration-200 shadow-lg shadow-blue-500/25 flex items-center gap-2">
-                    <span>🚀</span>
-                    <span>Boost Now</span>
-                    <span className="text-xs opacity-80">→</span>
+                    {isBoosting ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>🚀</span>
+                        <span>
+                          {!connected
+                            ? "Connect Wallet"
+                            : !hasToken
+                            ? "Create Token First"
+                            : !selectedToken
+                            ? "Select a Token"
+                            : "Boost Now"}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </motion.button>
 
                 <p className="text-[11px] text-gray-600 mt-4">
-                  Get 4 days of premium visibility • Global banner placement
+                  Get 4 days of premium visibility • Global banner placement • Click to Solscan
                 </p>
               </div>
             </div>
