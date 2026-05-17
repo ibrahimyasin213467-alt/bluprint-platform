@@ -17,11 +17,11 @@ interface Token {
 }
 
 export default function NewPairsPage() {
-  const [activeTab, setActiveTab] = useState<"bluprint" | "jupiter">("bluprint");
+  const [activeTab, setActiveTab] = useState<"bluprint" | "market">("bluprint");
   const [bluprintTokens, setBluprintTokens] = useState<Token[]>([]);
-  const [jupiterTokens, setJupiterTokens] = useState<Token[]>([]);
+  const [marketTokens, setMarketTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
-  const [jupiterLoading, setJupiterLoading] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,8 +29,8 @@ export default function NewPairsPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "jupiter") {
-      fetchJupiterTokens();
+    if (activeTab === "market") {
+      fetchMarketTokens();
     }
   }, [activeTab]);
 
@@ -53,25 +53,25 @@ export default function NewPairsPage() {
     }
   };
 
-  const fetchJupiterTokens = async () => {
-    setJupiterLoading(true);
+  const fetchMarketTokens = async () => {
+    setMarketLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/jupiter-tokens");
+      const res = await fetch("/api/dex-paprika");
       const data = await res.json();
       
       if (data.success && data.tokens && data.tokens.length > 0) {
-        setJupiterTokens(data.tokens.slice(0, 50));
+        setMarketTokens(data.tokens.slice(0, 50));
       } else {
-        setError(data.error || "No tokens found from Jupiter API");
-        setJupiterTokens([]);
+        setError(data.error || "No tokens found");
+        setMarketTokens([]);
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to fetch from Jupiter API");
-      setJupiterTokens([]);
+      setError(err.message || "Failed to fetch");
+      setMarketTokens([]);
     } finally {
-      setJupiterLoading(false);
+      setMarketLoading(false);
     }
   };
 
@@ -119,17 +119,15 @@ export default function NewPairsPage() {
               BluPrint Origin
             </button>
             <button
-              onClick={() => setActiveTab("jupiter")}
+              onClick={() => setActiveTab("market")}
               className={`flex items-center gap-2 px-6 py-2 text-sm font-medium transition-all duration-200 ${
-                activeTab === "jupiter"
-                  ? "text-purple-400 border-b-2 border-purple-400"
+                activeTab === "market"
+                  ? "text-green-400 border-b-2 border-green-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none"/>
-              </svg>
-              Jupiter
+              <span>📊</span>
+              DexPaprika
             </button>
           </div>
 
@@ -211,26 +209,26 @@ export default function NewPairsPage() {
             </>
           )}
 
-          {/* Jupiter List */}
-          {activeTab === "jupiter" && (
+          {/* DexPaprika List */}
+          {activeTab === "market" && (
             <>
-              {jupiterLoading ? (
+              {marketLoading ? (
                 <div className="flex justify-center py-20">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-green-500" />
                 </div>
               ) : error ? (
                 <div className="text-center py-20 text-red-400">
                   <p>⚠️ {error}</p>
                   <button 
-                    onClick={fetchJupiterTokens}
+                    onClick={fetchMarketTokens}
                     className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 text-white"
                   >
                     Retry
                   </button>
                 </div>
-              ) : jupiterTokens.length > 0 ? (
+              ) : marketTokens.length > 0 ? (
                 <div className="divide-y divide-gray-800/50">
-                  {jupiterTokens.map((token, idx) => (
+                  {marketTokens.map((token, idx) => (
                     <div key={token.mint || idx} className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
                       <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
                         <div className="w-10 text-center">
@@ -243,7 +241,7 @@ export default function NewPairsPage() {
                             {token.image ? (
                               <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center text-xs font-bold text-white">
                                 {token.symbol?.charAt(0) || "?"}
                               </div>
                             )}
@@ -255,10 +253,8 @@ export default function NewPairsPage() {
                         </div>
                         <div className="w-24">
                           <div className="flex items-center gap-1">
-                            <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none"/>
-                            </svg>
-                            <span className="text-xs text-purple-400">Jupiter</span>
+                            <span>📊</span>
+                            <span className="text-xs text-green-400">DexPaprika</span>
                           </div>
                         </div>
                         <div className="flex-1 text-right">
@@ -275,7 +271,7 @@ export default function NewPairsPage() {
                         </div>
                         <div className="w-12 text-right">
                           <button className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-gray-500 hover:text-purple-400 text-sm">→</span>
+                            <span className="text-gray-500 hover:text-green-400 text-sm">→</span>
                           </button>
                         </div>
                       </div>
@@ -286,7 +282,7 @@ export default function NewPairsPage() {
                 <div className="text-center py-20 text-gray-500">
                   <p>No tokens found</p>
                   <button 
-                    onClick={fetchJupiterTokens}
+                    onClick={fetchMarketTokens}
                     className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 text-white"
                   >
                     Refresh
