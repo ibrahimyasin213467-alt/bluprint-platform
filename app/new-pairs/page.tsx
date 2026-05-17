@@ -22,6 +22,7 @@ export default function NewPairsPage() {
   const [jupiterTokens, setJupiterTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [jupiterLoading, setJupiterLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchBluprintTokens();
@@ -54,16 +55,20 @@ export default function NewPairsPage() {
 
   const fetchJupiterTokens = async () => {
     setJupiterLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/jupiter-tokens");
       const data = await res.json();
+      
       if (data.success && data.tokens && data.tokens.length > 0) {
         setJupiterTokens(data.tokens.slice(0, 50));
       } else {
+        setError(data.error || "No tokens found from Jupiter API");
         setJupiterTokens([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || "Failed to fetch from Jupiter API");
       setJupiterTokens([]);
     } finally {
       setJupiterLoading(false);
@@ -95,7 +100,6 @@ export default function NewPairsPage() {
         
         <div className="relative z-10 pt-20 sm:pt-24 max-w-7xl mx-auto px-4 pb-16">
           
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-white">New Pairs</h1>
             <p className="text-gray-500 text-sm mt-1">Discover the latest tokens on Solana</p>
@@ -140,147 +144,156 @@ export default function NewPairsPage() {
             <div className="w-12"></div>
           </div>
 
-          {/* BluPrint Loading */}
-          {activeTab === "bluprint" && loading && (
-            <div className="flex justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500" />
-            </div>
-          )}
-
           {/* BluPrint List */}
-          {activeTab === "bluprint" && !loading && (
-            <div className="divide-y divide-gray-800/50">
-              {bluprintTokens.length > 0 ? (
-                bluprintTokens.map((token, idx) => (
-                  <div key={token.mint || idx} className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
-                    <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
-                      <div className="w-10 text-center">
-                        <span className={`text-sm font-mono ${idx < 3 ? "text-yellow-500" : "text-gray-500"}`}>
-                          #{idx + 1}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 w-48">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden">
-                          {token.image ? (
-                            <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <img src="/favicon.ico" alt="BluPrint" className="w-5 h-5" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white text-sm">{token.name}</div>
-                          <div className="text-xs text-gray-500">/{token.symbol}</div>
-                        </div>
-                      </div>
-                      <div className="w-24">
-                        <div className="flex items-center gap-1">
-                          <img src="/favicon.ico" alt="BluPrint" className="w-4 h-4" />
-                          <span className="text-xs text-blue-400">BluPrint</span>
-                        </div>
-                      </div>
-                      <div className="flex-1 text-right">
-                        <div className="text-sm text-white">—</div>
-                        <div className="text-xs text-gray-600">Liquidity</div>
-                      </div>
-                      <div className="w-28 text-right">
-                        <div className="text-sm text-white">—</div>
-                        <div className="text-xs text-gray-600">Volume 24h</div>
-                      </div>
-                      <div className="w-24 text-right">
-                        <span className="text-gray-500">0%</span>
-                        <div className="text-xs text-gray-600">24h %</div>
-                      </div>
-                      <div className="w-12 text-right">
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-gray-500 hover:text-blue-400 text-sm">→</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
+          {activeTab === "bluprint" && (
+            <>
+              {loading ? (
+                <div className="flex justify-center py-20">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500" />
+                </div>
               ) : (
-                <div className="text-center py-20 text-gray-500">
-                  <p>No tokens created yet</p>
-                  <p className="text-sm mt-2">Be the first to create a token on BluPrint!</p>
+                <div className="divide-y divide-gray-800/50">
+                  {bluprintTokens.length > 0 ? (
+                    bluprintTokens.map((token, idx) => (
+                      <div key={token.mint || idx} className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
+                        <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
+                          <div className="w-10 text-center">
+                            <span className={`text-sm font-mono ${idx < 3 ? "text-yellow-500" : "text-gray-500"}`}>
+                              #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 w-48">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden">
+                              {token.image ? (
+                                <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <img src="/favicon.ico" alt="BluPrint" className="w-5 h-5" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white text-sm">{token.name}</div>
+                              <div className="text-xs text-gray-500">/{token.symbol}</div>
+                            </div>
+                          </div>
+                          <div className="w-24">
+                            <div className="flex items-center gap-1">
+                              <img src="/favicon.ico" alt="BluPrint" className="w-4 h-4" />
+                              <span className="text-xs text-blue-400">BluPrint</span>
+                            </div>
+                          </div>
+                          <div className="flex-1 text-right">
+                            <div className="text-sm text-white">—</div>
+                            <div className="text-xs text-gray-600">Liquidity</div>
+                          </div>
+                          <div className="w-28 text-right">
+                            <div className="text-sm text-white">—</div>
+                            <div className="text-xs text-gray-600">Volume 24h</div>
+                          </div>
+                          <div className="w-24 text-right">
+                            <span className="text-gray-500">0%</span>
+                            <div className="text-xs text-gray-600">24h %</div>
+                          </div>
+                          <div className="w-12 text-right">
+                            <button className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span className="text-gray-500 hover:text-blue-400 text-sm">→</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-20 text-gray-500">
+                      <p>No tokens created yet</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Jupiter Loading */}
-          {activeTab === "jupiter" && jupiterLoading && (
-            <div className="flex justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
-            </div>
+            </>
           )}
 
           {/* Jupiter List */}
-          {activeTab === "jupiter" && !jupiterLoading && (
-            <div className="divide-y divide-gray-800/50">
-              {jupiterTokens.length > 0 ? (
-                jupiterTokens.map((token, idx) => (
-                  <div key={token.mint || idx} className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
-                    <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
-                      <div className="w-10 text-center">
-                        <span className={`text-sm font-mono ${idx < 3 ? "text-yellow-500" : "text-gray-500"}`}>
-                          #{idx + 1}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 w-48">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden">
-                          {token.image ? (
-                            <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
-                              ?
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white text-sm">{token.name}</div>
-                          <div className="text-xs text-gray-500">/{token.symbol}</div>
-                        </div>
-                      </div>
-                      <div className="w-24">
-                        <div className="flex items-center gap-1">
-                          <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none"/>
-                          </svg>
-                          <span className="text-xs text-purple-400">Jupiter</span>
-                        </div>
-                      </div>
-                      <div className="flex-1 text-right">
-                        <div className="text-sm text-white">${formatNumber(token.liquidity)}</div>
-                        <div className="text-xs text-gray-600">Liquidity</div>
-                      </div>
-                      <div className="w-28 text-right">
-                        <div className="text-sm text-white">${formatNumber(token.volume24h)}</div>
-                        <div className="text-xs text-gray-600">Volume 24h</div>
-                      </div>
-                      <div className="w-24 text-right">
-                        {formatPriceChange(token.priceChange24h)}
-                        <div className="text-xs text-gray-600">24h %</div>
-                      </div>
-                      <div className="w-12 text-right">
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-gray-500 hover:text-purple-400 text-sm">→</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-20 text-gray-500">
-                  <p>No tokens found from Jupiter</p>
+          {activeTab === "jupiter" && (
+            <>
+              {jupiterLoading ? (
+                <div className="flex justify-center py-20">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
+                </div>
+              ) : error ? (
+                <div className="text-center py-20 text-red-400">
+                  <p>⚠️ {error}</p>
                   <button 
                     onClick={fetchJupiterTokens}
-                    className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700"
+                    className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 text-white"
                   >
                     Retry
                   </button>
                 </div>
+              ) : jupiterTokens.length > 0 ? (
+                <div className="divide-y divide-gray-800/50">
+                  {jupiterTokens.map((token, idx) => (
+                    <div key={token.mint || idx} className="group hover:bg-gray-800/30 transition-all duration-150 border-b border-gray-800/50 last:border-0">
+                      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}>
+                        <div className="w-10 text-center">
+                          <span className={`text-sm font-mono ${idx < 3 ? "text-yellow-500" : "text-gray-500"}`}>
+                            #{idx + 1}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 w-48">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden">
+                            {token.image ? (
+                              <img src={token.image} alt={token.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
+                                {token.symbol?.charAt(0) || "?"}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-white text-sm">{token.name}</div>
+                            <div className="text-xs text-gray-500">/{token.symbol}</div>
+                          </div>
+                        </div>
+                        <div className="w-24">
+                          <div className="flex items-center gap-1">
+                            <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none"/>
+                            </svg>
+                            <span className="text-xs text-purple-400">Jupiter</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 text-right">
+                          <div className="text-sm text-white">${formatNumber(token.liquidity)}</div>
+                          <div className="text-xs text-gray-600">Liquidity</div>
+                        </div>
+                        <div className="w-28 text-right">
+                          <div className="text-sm text-white">${formatNumber(token.volume24h)}</div>
+                          <div className="text-xs text-gray-600">Volume 24h</div>
+                        </div>
+                        <div className="w-24 text-right">
+                          {formatPriceChange(token.priceChange24h)}
+                          <div className="text-xs text-gray-600">24h %</div>
+                        </div>
+                        <div className="w-12 text-right">
+                          <button className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-gray-500 hover:text-purple-400 text-sm">→</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20 text-gray-500">
+                  <p>No tokens found</p>
+                  <button 
+                    onClick={fetchJupiterTokens}
+                    className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 text-white"
+                  >
+                    Refresh
+                  </button>
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
         <Footer />
