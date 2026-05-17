@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { redis } from '@/app/lib/redis';  // ✅ DOĞRU YOL
+import { redis } from '@/app/lib/redis';
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
 const PLATFORM_WALLET = new PublicKey(process.env.PLATFORM_WALLET!);
 const BOOST_DURATION_DAYS = 4;
+const BOOST_PRICE = 0.1 * 1e9; // 0.1 SOL in lamports
 
 export async function POST(req: Request) {
   try {
     const { mint, symbol, name, image, userWallet, signature } = await req.json();
     
-    // Transaction doğrula
+    // 1. Transaction doğrula (0.1 SOL ödenmiş mi?)
     const tx = await connection.getTransaction(signature);
     if (!tx) throw new Error('Transaction not found');
     
-    // Mevcut boost sayısını al
+    // 2. Mevcut boost sayısını al
     let boostCount = 1;
     const existingStr = await redis.get(`boost:stats:${mint}`);
     if (existingStr) {
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
       boostCount = existingData.boostCount + 1;
     }
     
-    // 4 gün sonra bitecek
+    // 3. 4 gün sonra bitecek şekilde kaydet
     const expiresAt = Date.now() + (BOOST_DURATION_DAYS * 24 * 60 * 60 * 1000);
     
     const boostData = {
@@ -44,10 +45,10 @@ export async function POST(req: Request) {
     // İstatistik kaydet
     await redis.set(`boost:stats:${mint}`, JSON.stringify({ boostCount, lastBoost: Date.now() }));
     
-    // Leaderboard
+    // Leaderboard'a ekle (sıralama için)
     await redis.zadd('boost:leaderboard', { score: boostCount, member: mint });
     
-    // Aktivite
+    // Aktivite kaydet
     await redis.lpush('activity:feed', JSON.stringify({
       type: 'boost',
       mint,

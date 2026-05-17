@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { redis } from '@/app/lib/redis';  // ✅ DOĞRU YOL
+import { redis } from '@/app/lib/redis';
 
 export async function GET() {
   try {
@@ -24,6 +24,7 @@ export async function GET() {
     // Boost sayısına göre sırala (en çok boostlanan en önde)
     activeBoosts.sort((a, b) => b.boostCount - a.boostCount);
     
+    // MOCK DATA YOK - SADECE GERÇEK VERİ
     return NextResponse.json({ success: true, tokens: activeBoosts });
   } catch (error: any) {
     console.error('Active boosts error:', error);

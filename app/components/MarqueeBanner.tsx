@@ -1,66 +1,100 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+
+interface BoostedToken {
+  mint: string;
+  symbol: string;
+  name: string;
+  image?: string;
+  boostCount: number;
+  expiresAt: number;
+}
 
 export default function MarqueeBanner() {
-  const [tokens, setTokens] = useState([
-    { mint: "1", symbol: "BLUEP", name: "BluPrint", boostCount: 15 },
-    { mint: "2", symbol: "SOL", name: "Solana", boostCount: 12 },
-    { mint: "3", symbol: "BONK", name: "Bonk", boostCount: 8 },
-    { mint: "4", symbol: "PEPE", name: "Pepe", boostCount: 20 },
-    { mint: "5", symbol: "WIF", name: "DogWifHat", boostCount: 18 },
-  ]);
+  const [tokens, setTokens] = useState<BoostedToken[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // API'yi dene, gelmezse mock data kullan
-    fetch('/api/boost/active')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.tokens && data.tokens.length > 0) {
-          setTokens(data.tokens);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+    fetchActiveBoosts();
+    const interval = setInterval(fetchActiveBoosts, 30000);
+    return () => clearInterval(interval);
   }, []);
 
+  const fetchActiveBoosts = async () => {
+    try {
+      const res = await fetch('/api/boost/active');
+      const data = await res.json();
+      if (data.success && data.tokens && data.tokens.length > 0) {
+        setTokens(data.tokens);
+      } else {
+        setTokens([]);
+      }
+    } catch (err) {
+      console.error('Banner fetch error:', err);
+      setTokens([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRemainingTime = (expiresAt: number): string => {
+    const diff = expiresAt - Date.now();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (86400000)) / 3600000);
+    
+    if (days > 0) return `${days}g ${hours}s`;
+    if (hours > 0) return `${hours}s`;
+    return "bitiyor";
+  };
+
+  // Loading veya token yoksa gösterme
   if (loading) return null;
+  if (tokens.length === 0) return null;
 
   // Sonsuz kayma için 3 kopya
-  const bannerContent = [...tokens, ...tokens, ...tokens];
+  const marqueeItems = [...tokens, ...tokens, ...tokens];
 
   return (
-    <div className="w-full overflow-hidden bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900 border-y border-purple-500/30 py-2">
-      <div className="whitespace-nowrap inline-block animate-marquee">
-        {bannerContent.map((token, idx) => (
-          <button
-            key={`${token.mint}-${idx}`}
-            onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}
-            className="inline-flex items-center gap-2 mx-2 px-3 py-1 bg-gray-800/50 rounded-full border border-purple-500/30 hover:border-purple-500 hover:bg-gray-800 transition-all duration-200"
-          >
-            <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-[10px]">
-              🚀
-            </div>
-            <span className="text-sm font-semibold text-white">{token.symbol}</span>
-            <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">
-              🔥 {token.boostCount}
-            </span>
-          </button>
-        ))}
+    <div className="fixed top-16 left-0 right-0 z-40 bg-black/95 backdrop-blur-sm border-y border-yellow-500/30 py-1.5">
+      <div className="relative overflow-hidden whitespace-nowrap">
+        <motion.div
+          animate={{ x: ["0%", "-50%"] }}
+          transition={{ duration: 25, ease: "linear", repeat: Infinity }}
+          className="inline-flex items-center gap-2"
+        >
+          {marqueeItems.map((token, idx) => (
+            <button
+              key={`${token.mint}-${idx}`}
+              onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}
+              className="group flex items-center gap-2 px-3 py-1 bg-gray-800/80 rounded-full border border-yellow-500/40 hover:border-yellow-500 hover:bg-gray-800 transition-all duration-200"
+            >
+              {/* Logo */}
+              {token.image ? (
+                <img src={token.image} alt={token.symbol} className="w-5 h-5 rounded-full" />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center text-[10px]">
+                  🚀
+                </div>
+              )}
+              
+              {/* Token sembolü */}
+              <span className="text-sm font-semibold text-white">{token.symbol}</span>
+              
+              {/* Boost sayısı */}
+              <span className="text-[10px] font-bold text-yellow-400 bg-yellow-500/20 px-2 py-0.5 rounded-full">
+                🔥 {token.boostCount}
+              </span>
+              
+              {/* Kalan süre (mobilde gizle) */}
+              <span className="text-[10px] text-gray-400 hidden sm:inline">
+                {getRemainingTime(token.expiresAt)}
+              </span>
+            </button>
+          ))}
+        </motion.div>
       </div>
-
-      <style jsx>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-33.33%); }
-        }
-        .animate-marquee {
-          animation: marquee 25s linear infinite;
-        }
-      `}</style>
     </div>
   );
 }
