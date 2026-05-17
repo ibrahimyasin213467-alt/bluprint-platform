@@ -49,7 +49,6 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-6 border-b border-gray-800">
         <Link href="/" className="flex items-center gap-3">
-          {/* Favicon logosu */}
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 overflow-hidden">
             <img 
               src="/favicon.ico" 
@@ -65,7 +64,7 @@ export default function Sidebar() {
       </div>
 
       {/* Menu Items */}
-      <nav className="flex-1 px-3 py-6 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1">
         {menuItems.map((item) => (
           <Link
             key={item.href}
@@ -89,8 +88,8 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Wallet & Settings */}
-      <div className="px-3 py-4 border-t border-gray-800 space-y-3">
+      {/* Wallet & Settings - padding azaltıldı, daha yukarı */}
+      <div className="px-3 py-3 border-t border-gray-800 space-y-2">
         <button
           onClick={handleWalletClick}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-800/50 hover:bg-gray-800 transition text-sm"
@@ -106,7 +105,7 @@ export default function Sidebar() {
           </span>
         </button>
         
-        <div className="flex items-center justify-between px-2">
+        <div className="flex items-center justify-between px-1">
           <ThemeToggle />
           <LanguageSwitcher />
         </div>
