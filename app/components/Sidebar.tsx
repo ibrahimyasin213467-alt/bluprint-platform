@@ -46,7 +46,7 @@ export default function Sidebar() {
 
   const sidebarContent = (
     <>
-      {/* Logo - daha küçük padding */}
+      {/* Logo */}
       <div className="px-4 py-4 border-b border-gray-800">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 overflow-hidden">
@@ -63,7 +63,7 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Menu Items - daha az padding */}
+      {/* Menu Items */}
       <nav className="flex-1 px-3 py-3 space-y-0.5">
         {menuItems.map((item) => (
           <Link
@@ -88,12 +88,11 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Wallet & Settings - İYİCE YUKARIDA, border yok */}
-      <div className="px-3 pt-0 pb-3 space-y-2">
-        {/* Connect Wallet Butonu */}
+      {/* Wallet & Settings */}
+      <div className="px-3 pt-2 pb-4 space-y-2.5">
         <button
           onClick={handleWalletClick}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-green-600/20 to-green-500/10 border border-green-500/30 hover:from-green-600/30 hover:to-green-500/20 transition-all duration-200"
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-green-600/20 to-green-500/10 border border-green-500/30 hover:from-green-600/30 hover:to-green-500/20 transition-all duration-200"
         >
           <div className="w-6 h-6 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg">
             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -109,8 +108,7 @@ export default function Sidebar() {
           )}
         </button>
         
-        {/* Theme & Language - YANYANA, daha kompakt */}
-        <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center justify-between gap-2 px-1">
           <ThemeToggle />
           <LanguageSwitcher />
         </div>
@@ -122,13 +120,13 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <aside className="fixed left-0 top-10 h-full w-56 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 z-40 hidden md:flex flex-col">
+      {/* Desktop Sidebar - top-10 yerine top-5 yapıldı */}
+      <aside className="fixed left-0 top-5 h-full w-56 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 z-40 hidden md:flex flex-col">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Header */}
-      <div className="fixed top-10 left-0 right-0 z-30 md:hidden bg-gray-900/95 backdrop-blur-xl border-b border-gray-800">
+      {/* Mobile Header - top-10 yerine top-5 yapıldı */}
+      <div className="fixed top-5 left-0 right-0 z-30 md:hidden bg-gray-900/95 backdrop-blur-xl border-b border-gray-800">
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
